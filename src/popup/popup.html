@@ -20,7 +20,15 @@
         <input id="company" type="text" autocomplete="organization">
         <label for="role">Role</label>
         <input id="role" type="text">
+        <label class="switch-row" for="track-application">
+          <input id="track-application" type="checkbox">
+          <span>Add this application to my job tracker</span>
+        </label>
         <button id="save-context" type="button">Save details</button>
+      </section>
+      <section aria-labelledby="tracker-heading">
+        <h2 id="tracker-heading">Tracked applications</h2>
+        <ul id="tracked-applications"></ul>
       </section>
       <p id="match-count" aria-live="polite">Matched fields on this page: 0</p>
       <button id="enable-current-page" type="button" hidden>Enable on this page</button>

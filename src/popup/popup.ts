@@ -1,6 +1,7 @@
 export {};
 
 type JobContext = { company?: string; role?: string };
+type TrackedApplication = JobContext & { url: string; savedAt: string };
 type Tab = { id?: number; url?: string; title?: string };
 type PopupBrowser = {
   tabs: {
@@ -25,6 +26,8 @@ const enabledInput = document.querySelector<HTMLInputElement>('#site-enabled')!;
 const companyInput = document.querySelector<HTMLInputElement>('#company')!;
 const roleInput = document.querySelector<HTMLInputElement>('#role')!;
 const saveContextButton = document.querySelector<HTMLButtonElement>('#save-context')!;
+const trackApplicationInput = document.querySelector<HTMLInputElement>('#track-application')!;
+const trackedApplicationsList = document.querySelector<HTMLUListElement>('#tracked-applications')!;
 const matchCount = document.querySelector<HTMLParagraphElement>('#match-count')!;
 const enableCurrentPage = document.querySelector<HTMLButtonElement>('#enable-current-page')!;
 const status = document.querySelector<HTMLParagraphElement>('#popup-status')!;
@@ -76,6 +79,7 @@ let pageUrl: URL | undefined;
 let contextStorageKey: string;
 let siteEnabled: Record<string, boolean>;
 let contextOverrides: Record<string, JobContext>;
+let trackedApplications: TrackedApplication[];
 let contentScriptAvailable = false;
 
 async function persistSiteEnabled(enabled: boolean): Promise<void> {
@@ -91,13 +95,48 @@ enabledInput.addEventListener('change', () => {
 });
 
 saveContextButton.addEventListener('click', async () => {
-  contextOverrides[contextStorageKey] = { company: companyInput.value.trim() || undefined, role: roleInput.value.trim() || undefined };
-  await browserApi.storage.local.set({ jobContextOverrides: contextOverrides });
+  const context = { company: companyInput.value.trim() || undefined, role: roleInput.value.trim() || undefined };
+  contextOverrides[contextStorageKey] = context;
+  const updates: Record<string, unknown> = { jobContextOverrides: contextOverrides };
+  if (trackApplicationInput.checked && pageUrl) {
+    const url = pageUrl.href;
+    const existing = trackedApplications.find((application) => application.url === url);
+    const tracked: TrackedApplication = { ...context, url, savedAt: existing?.savedAt ?? new Date().toISOString() };
+    trackedApplications = [tracked, ...trackedApplications.filter((application) => application.url !== url)];
+    updates.trackedApplications = trackedApplications;
+    renderTrackedApplications();
+  }
+  await browserApi.storage.local.set(updates);
   if (activeTab.id !== undefined) {
     try { await browserApi.tabs.sendMessage(activeTab.id, { type: 'refresh-focused-preview' }); } catch { /* no content script is active here */ }
   }
-  showStatus('Company and role saved for this site.');
+  showStatus(trackApplicationInput.checked ? 'Details saved and added to your job tracker.' : 'Company and role saved for this site.');
 });
+
+function renderTrackedApplications(): void {
+  trackedApplicationsList.replaceChildren();
+  for (const application of trackedApplications) {
+    const item = document.createElement('li');
+    const title = [application.role, application.company].filter(Boolean).join(' at ') || new URL(application.url).hostname;
+    const link = document.createElement('a');
+    link.href = application.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = title;
+    item.append(link);
+    if (application.savedAt) {
+      const date = document.createElement('small');
+      date.textContent = ` — saved ${new Date(application.savedAt).toLocaleDateString()}`;
+      item.append(date);
+    }
+    trackedApplicationsList.append(item);
+  }
+  if (trackedApplications.length === 0) {
+    const empty = document.createElement('li');
+    empty.textContent = 'No applications tracked yet.';
+    trackedApplicationsList.append(empty);
+  }
+}
 
 enableCurrentPage.addEventListener('click', async () => {
   if (activeTab.id === undefined) return;
@@ -128,9 +167,12 @@ async function initialize(): Promise<void> {
   hostname = pageUrl?.hostname || 'current-page';
   contextStorageKey = `${hostname}${pageUrl?.pathname ?? ''}`;
   siteName.textContent = pageUrl ? (hostname || 'Browser internal page') : 'This browser page cannot be accessed';
-  const stored = await browserApi.storage.local.get(['siteEnabled', 'jobContextOverrides', 'detectedPageContexts']);
+  const stored = await browserApi.storage.local.get(['siteEnabled', 'jobContextOverrides', 'detectedPageContexts', 'trackedApplications']);
   siteEnabled = (stored.siteEnabled as Record<string, boolean> | undefined) ?? {};
   contextOverrides = (stored.jobContextOverrides as Record<string, JobContext> | undefined) ?? {};
+  trackedApplications = (stored.trackedApplications as TrackedApplication[] | undefined) ?? [];
+  trackApplicationInput.checked = false;
+  renderTrackedApplications();
   const detectedContexts = (stored.detectedPageContexts as Record<string, JobContext> | undefined) ?? {};
   const inferred = pageUrl ? contextFromTitle(activeTab.title ?? '', pageUrl) : {};
   const context = mergeContext(inferred, detectedContexts[contextStorageKey], contextOverrides[contextStorageKey]);

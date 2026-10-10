@@ -4,7 +4,7 @@ A lightweight Firefox and Zen extension for previewing answers from a private, u
 
 ## Current status
 
-The extension can import and export an answers JSON file from its settings page, detect focused fields on supported job boards, and preview matching text and native choice answers. The toolbar popup shows an editable company and role, a site on/off switch, and the number of matched fields in the current tab. On other sites, use **Enable on this page** in the popup to grant temporary access for that tab.
+The extension can import and export an answers JSON file from its settings page, detect focused fields on supported job boards, and preview matching text and native choice answers. The toolbar popup shows an editable company and role, a site on/off switch, and the number of matched fields in the current tab. You can opt in to tracking an application when saving its company and role; tracked entries remain in local browser storage and link back to the application page. On other sites, use **Enable on this page** in the popup to grant temporary access for that tab.
 
 ## Development setup
 

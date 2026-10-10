@@ -206,7 +206,13 @@ export function chooseEthnicityOption<T extends ChoiceOption>(
   if (confidence !== 'high' || !isEthnicity || !alias) return { applicable: false };
   const matches = options.filter((option) => ethnicityAliasKey(option.label) === alias
     || ethnicityAliasKey(option.value ?? '') === alias);
-  return { applicable: true, option: matches.length === 1 ? matches[0] : undefined };
+  if (matches.length === 1) return { applicable: true, option: matches[0] };
+  if (matches.length > 1) return { applicable: true, option: undefined };
+
+  // A broad “Asian” option is a fallback only when no Southeast Asian variant is offered.
+  const broadAsianOptions = options.filter((option) =>
+    /^(?:asian)$/i.test(option.label.trim()) || /^(?:asian)$/i.test((option.value ?? '').trim()));
+  return { applicable: true, option: broadAsianOptions.length === 1 ? broadAsianOptions[0] : undefined };
 }
 
 function focusedChoices(target: HTMLInputElement | HTMLSelectElement): SelectChoice[] {
