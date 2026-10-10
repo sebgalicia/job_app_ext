@@ -9,8 +9,24 @@
   <body>
     <main>
       <h1>Job Autofill</h1>
-      <p>The toolbar controls will be added in a later step.</p>
+      <p id="site-name">Current site</p>
+      <label class="switch-row" for="site-enabled">
+        <input id="site-enabled" type="checkbox">
+        <span>Enable previews on this site</span>
+      </label>
+      <section aria-labelledby="context-heading">
+        <h2 id="context-heading">Application details</h2>
+        <label for="company">Company</label>
+        <input id="company" type="text" autocomplete="organization">
+        <label for="role">Role</label>
+        <input id="role" type="text">
+        <button id="save-context" type="button">Save details</button>
+      </section>
+      <p id="match-count" aria-live="polite">Matched fields on this page: 0</p>
+      <button id="enable-current-page" type="button" hidden>Enable on this page</button>
+      <p id="popup-status" role="status" aria-live="polite"></p>
       <a href="settings.html" target="_blank">Open settings</a>
     </main>
+    <script src="popup.js"></script>
   </body>
 </html>

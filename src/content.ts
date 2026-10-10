@@ -1,6 +1,6 @@
 import { chooseAdapter } from './adapters';
 import { describeFocusedField } from './adapters/field';
-import { showChoicePreview, showTextPreview } from './preview/text-preview';
+import { dismissActivePreview, saveDetectedPageContext, showChoicePreview, showTextPreview } from './preview/text-preview';
 
 const supportedControls = 'input, textarea, select';
 
@@ -12,18 +12,69 @@ function isEligibleControl(target: EventTarget | null): target is HTMLInputEleme
   return true;
 }
 
-function handleFocus(event: FocusEvent): void {
-  if (!isEligibleControl(event.target)) return;
-  const adapter = chooseAdapter(document);
-  const descriptor = describeFocusedField(event.target, adapter);
-  if (!descriptor.question) return;
+const previewBrowser = (globalThis as typeof globalThis & { browser: {
+  storage: { local: { get(key: string): Promise<Record<string, unknown>> } };
+  runtime: {
+    onMessage: { addListener(listener: (message: { type?: string; enabled?: boolean }) => unknown): void };
+    sendMessage(message: Record<string, unknown>): Promise<unknown>;
+  };
+} }).browser;
 
-  document.dispatchEvent(new CustomEvent('job-autofill:question-detected', {
-    detail: { ...descriptor, field: event.target },
-  }));
-  if (descriptor.fieldType === 'text') void showTextPreview(event.target, descriptor);
-  else void showChoicePreview(event.target, descriptor);
+async function processFocusedControl(target: EventTarget | null): Promise<void> {
+  if (!isEligibleControl(target)) return;
+  try {
+    const stored = await previewBrowser.storage.local.get('siteEnabled');
+    const siteEnabled = stored.siteEnabled as Record<string, boolean> | undefined;
+    if (siteEnabled?.[location.hostname] === false) return;
+    void saveDetectedPageContext();
+    const adapter = chooseAdapter(document);
+    const descriptor = describeFocusedField(target, adapter);
+    if (!descriptor.question) return;
+
+    document.dispatchEvent(new CustomEvent('job-autofill:question-detected', {
+      detail: { ...descriptor, field: target },
+    }));
+    if (descriptor.fieldType === 'text') await showTextPreview(target, descriptor);
+    else await showChoicePreview(target, descriptor);
+  } catch {
+    // Form focus must keep working if extension storage is temporarily unavailable.
+  }
 }
 
-// Content scripts are present on matched hosts, but do no work until focus enters a form control.
-document.addEventListener('focusin', handleFocus);
+function handleFocus(event: FocusEvent): void {
+  void processFocusedControl(event.target);
+}
+
+const installationFlag = '__jobAutofillContentInstalled';
+const contentWorld = globalThis as typeof globalThis & Record<string, unknown>;
+if (!contentWorld[installationFlag]) {
+  contentWorld[installationFlag] = true;
+  const frameMessageFlag = '__jobAutofillFrameMessage';
+  // Matched pages and user-enabled tabs remain idle until a form field receives focus.
+  document.addEventListener('focusin', handleFocus);
+
+  previewBrowser.runtime.onMessage.addListener((message) => {
+    if (message.type === 'content-ping') return { ready: true };
+    if (message.type === 'site-state' && message.enabled === false) {
+      dismissActivePreview();
+      if (window.top === window) window.postMessage({ marker: frameMessageFlag, type: message.type }, '*');
+    }
+    if (message.type === 'refresh-focused-preview') {
+      void processFocusedControl(document.activeElement);
+      if (window.top === window) window.postMessage({ marker: frameMessageFlag, type: message.type }, '*');
+    }
+    return undefined;
+  });
+
+  window.addEventListener('message', (event: MessageEvent) => {
+    if (window.top === window || event.source !== window.top || event.data?.marker !== frameMessageFlag) return;
+    if (event.data.type === 'site-state') dismissActivePreview();
+    if (event.data.type === 'refresh-focused-preview') void processFocusedControl(document.activeElement);
+  });
+
+  window.addEventListener('pagehide', () => {
+    if (window.top === window) {
+      void previewBrowser.runtime.sendMessage({ type: 'reset-match-count' }).catch(() => undefined);
+    }
+  });
+}

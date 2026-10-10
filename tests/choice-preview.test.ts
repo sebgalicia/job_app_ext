@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chooseTextOption, isPlaceholderOption } from '../src/preview/text-preview';
+import { chooseEthnicityOption, chooseTextOption, ethnicityAliasKey, isPlaceholderOption } from '../src/preview/text-preview';
 
 describe('native choice preview matching', () => {
   it('treats empty and placeholder select options as empty', () => {
@@ -23,5 +23,24 @@ describe('native choice preview matching', () => {
       { label: 'Software Engineer', value: 'software' },
       { label: 'Product Engineer', value: 'product' },
     ])).toBeUndefined();
+  });
+
+  it('maps SE Asian to Southeast Asian only for a high-confidence ethnicity question', () => {
+    const options = [
+      { label: 'East Asian', value: 'east' },
+      { label: 'Southeast Asian', value: 'southeast' },
+      { label: 'South Asian', value: 'south' },
+    ];
+    expect(ethnicityAliasKey('SE Asian')).toBe('southeast-asian');
+    expect(chooseEthnicityOption('What is your ethnicity?', ['What is your ethnicity?'], 'SE Asian', options, 'high').option?.value)
+      .toBe('southeast');
+    expect(chooseEthnicityOption('What is your ethnicity?', ['What is your ethnicity?'], 'SE Asian', options, 'medium').applicable)
+      .toBe(false);
+  });
+
+  it('does not guess another ethnicity when the matching category is absent', () => {
+    const options = [{ label: 'East Asian' }, { label: 'South Asian' }, { label: 'Asian' }];
+    const result = chooseEthnicityOption('Race and ethnicity', ['What is your ethnicity?'], 'SE Asian', options, 'high');
+    expect(result).toEqual({ applicable: true, option: undefined });
   });
 });

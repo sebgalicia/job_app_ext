@@ -8,7 +8,13 @@ type StoredAnswers = {
   answers?: Array<{ questions: string[]; type: 'text' | 'choice' | 'yesno'; answer: string | boolean; sensitive?: boolean }>;
 };
 
-type StorageBrowser = { storage: { local: { get(key: string): Promise<Record<string, unknown>> } } };
+type StorageBrowser = {
+  storage: { local: {
+    get(key: string | string[]): Promise<Record<string, unknown>>;
+    set(values: Record<string, unknown>): Promise<void>;
+  } };
+  runtime: { sendMessage(message: Record<string, unknown>): Promise<unknown> };
+};
 type PreviewField = HTMLInputElement | HTMLTextAreaElement;
 type PreviewTarget = PreviewField | HTMLSelectElement;
 type SelectChoice = ChoiceOption & { element: HTMLOptionElement };
@@ -56,16 +62,68 @@ export function resolvePlaceholders(
   return { text, missing: [...new Set(missing)] };
 }
 
-function contextFromPage(): { company?: string; role?: string } {
-  // Values can be overridden from the toolbar popup in a later UI step.
+export function detectPageContext(): { company?: string; role?: string } {
   const title = document.title;
   const heading = document.querySelector('h1')?.textContent?.trim() ?? '';
   const text = `${heading} ${title}`;
-  const role = heading || title.split(/[|–—-]/)[0]?.trim();
-  const companyMatch = text.match(/\b(?:jobs?|careers?)\s+(?:at|with)\s+([^|–—-]+)/i)
-    ?? text.match(/\bat\s+([A-Z][\w&.' -]{1,60})/);
-  const company = companyMatch?.[1]?.trim();
+  const atMatch = title.match(/^(.+?)\s+(?:at|@)\s+(.+?)(?:\s+\|.*)?$/i);
+  const companyMatch = text.match(/\b(?:jobs?|careers?)\s+(?:at|with)\s+([^|]+)/i);
+  const headingIsGeneric = /^(apply|application|careers?|job application)$/i.test(heading);
+  const titleRole = atMatch?.[1]?.trim();
+  const titleRoleIsGeneric = Boolean(titleRole && /^(careers?|jobs?|open positions|job openings)$/i.test(titleRole));
+  const role = (!titleRoleIsGeneric && titleRole) || (!headingIsGeneric && heading) || title.split('|')[0]?.trim();
+  const company = companyMatch?.[1]?.trim() || atMatch?.[2]?.trim();
   return { company, role: role || undefined };
+}
+
+const reportedMatches = new WeakSet<HTMLElement>();
+
+function pageContextKey(): string {
+  return `${location.hostname}${location.pathname}`;
+}
+
+export function reportMatchedField(field: PreviewTarget): void {
+  const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
+  const controls: HTMLElement[] = [field];
+  if (field instanceof HTMLInputElement && ['radio', 'checkbox'].includes(field.type) && field.name) {
+    controls.push(...Array.from((field.form ?? field.ownerDocument).querySelectorAll<HTMLInputElement>(`input[type="${field.type}"]`))
+      .filter((input) => input.name === field.name));
+  }
+  if (controls.some((control) => reportedMatches.has(control))) return;
+  controls.forEach((control) => reportedMatches.add(control));
+  void browserApi.runtime.sendMessage({ type: 'field-matched' }).catch(() => undefined);
+}
+
+export function dismissActivePreview(): void {
+  clearActivePreview();
+}
+
+export async function saveDetectedPageContext(): Promise<void> {
+  try {
+    const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
+    const detected = detectPageContext();
+    if (!detected.company && !detected.role) return;
+    const stored = await browserApi.storage.local.get('detectedPageContexts');
+    const contexts = (stored.detectedPageContexts as Record<string, { company?: string; role?: string }> | undefined) ?? {};
+    const key = pageContextKey();
+    const previous = contexts[key] ?? {};
+    contexts[key] = { company: detected.company || previous.company, role: detected.role || previous.role };
+    await browserApi.storage.local.set({ detectedPageContexts: contexts });
+  } catch {
+    // Page context is a convenience; a read/write failure must not affect form use.
+  }
+}
+
+async function previewContext(stored: Record<string, unknown>): Promise<{ company?: string; role?: string }> {
+  const overrides = stored.jobContextOverrides as Record<string, { company?: string; role?: string }> | undefined;
+  const detected = stored.detectedPageContexts as Record<string, { company?: string; role?: string }> | undefined;
+  const current = pageContextKey();
+  const fallback = { ...detectPageContext(), ...detected?.[current] };
+  const override = overrides?.[current];
+  return {
+    company: override?.company?.trim() || fallback.company,
+    role: override?.role?.trim() || fallback.role,
+  };
 }
 
 function profileCandidates(profile: StoredAnswers['profile']): MatchCandidate[] {
@@ -127,6 +185,28 @@ export function chooseTextOption<T extends ChoiceOption>(answer: string, options
   if (!scored[0] || scored[0].score < defaultThresholds.high) return undefined;
   if (scored[1] && scored[0].score - scored[1].score < 0.08) return undefined;
   return scored[0].option;
+}
+
+export function ethnicityAliasKey(text: string): 'southeast-asian' | undefined {
+  const normalized = text.toLocaleLowerCase('en-US').replace(/[^a-z]+/g, ' ').trim();
+  return /\b(?:se|south east|south eastern|southeast|southeastern) asian\b/.test(normalized)
+    ? 'southeast-asian'
+    : undefined;
+}
+
+export function chooseEthnicityOption<T extends ChoiceOption>(
+  question: string,
+  savedQuestionWordings: string[],
+  answer: string,
+  options: T[],
+  confidence: 'high' | 'medium' | 'none',
+): { applicable: boolean; option?: T } {
+  const isEthnicity = /\b(?:ethnic(?:ity)?|race)\b/i.test(`${question} ${savedQuestionWordings.join(' ')}`);
+  const alias = ethnicityAliasKey(answer);
+  if (confidence !== 'high' || !isEthnicity || !alias) return { applicable: false };
+  const matches = options.filter((option) => ethnicityAliasKey(option.label) === alias
+    || ethnicityAliasKey(option.value ?? '') === alias);
+  return { applicable: true, option: matches.length === 1 ? matches[0] : undefined };
 }
 
 function focusedChoices(target: HTMLInputElement | HTMLSelectElement): SelectChoice[] {
@@ -206,12 +286,13 @@ function getStoredChoice(
   }
 
   if (typeof entry?.answer !== 'string') return undefined;
-  const selectedOption = chooseTextOption(entry.answer, options);
+  const ethnicityMatch = chooseEthnicityOption(question, entry.questions, entry.answer, options, storedMatch?.confidence ?? 'none');
+  const selectedOption = ethnicityMatch.applicable ? ethnicityMatch.option : chooseTextOption(entry.answer, options);
   if (!selectedOption) return undefined;
   return {
     option: selectedOption,
     confidence: storedMatch?.confidence ?? 'high',
-    sensitive: Boolean(entry.sensitive || /salary|compensation|race|gender|disability|demograph/i.test(question)),
+    sensitive: Boolean(entry.sensitive || /salary|compensation|race|ethnic|gender|disability|demograph/i.test(`${question} ${entry.questions.join(' ')}`)),
   };
 }
 
@@ -384,6 +465,7 @@ function installPreview(field: PreviewField, text: string, highlighted: boolean,
   field.addEventListener('input', onInput, true);
   field.addEventListener('blur', onBlur, true);
   activePreview = { field, cleanup };
+  reportMatchedField(field);
 }
 
 /** Load local answers only for the focused empty text field and install a one-field preview. */
@@ -397,7 +479,7 @@ export async function showTextPreview(
 
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    const stored = await browserApi.storage.local.get('answers');
+    const stored = await browserApi.storage.local.get(['answers', 'jobContextOverrides', 'detectedPageContexts']);
     if (document.activeElement !== target) return;
     const answers = stored.answers as StoredAnswers | undefined;
     if (!answers) return;
@@ -414,7 +496,8 @@ export async function showTextPreview(
     const answer = answerByKey.get(match.bestKey);
     if (answer === undefined) return;
 
-    const resolved = resolvePlaceholders(answer, contextFromPage());
+    const context = await previewContext(stored);
+    const resolved = resolvePlaceholders(answer, context);
     const highlighted = match.confidence === 'medium' || sensitiveByKey.has(match.bestKey) || resolved.missing.length > 0;
     installPreview(target, resolved.text, highlighted, resolved.missing.length > 0);
   } catch {

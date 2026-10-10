@@ -11,6 +11,7 @@ const watch = process.argv.includes('--watch');
 const entries = {
   background: './src/background.ts',
   content: './src/content.ts',
+  popup: './src/popup/popup.ts',
   settings: './src/settings/settings.ts',
 };
 
@@ -32,9 +33,10 @@ async function copyStaticFiles() {
     await rm(resolve(out, entry), { recursive: true, force: true });
   }
   await cp(resolve(root, 'manifest.json'), resolve(out, 'manifest.json'));
-  await cp(resolve(root, 'src/popup'), resolve(out), { recursive: true });
+  await cp(resolve(root, 'src/popup/popup.html'), resolve(out, 'popup.html'));
   await cp(resolve(root, 'src/settings/settings.html'), resolve(out, 'settings.html'));
   await cp(resolve(root, 'src/styles'), resolve(out), { recursive: true });
+  await cp(resolve(root, 'src/styles/base.css'), resolve(out, 'content.css'));
 }
 
 await compileAnswersSchema();
