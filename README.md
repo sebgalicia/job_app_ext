@@ -105,4 +105,4 @@ Build and package the generated `dist/` directory with `npx web-ext build --sour
 
 ## Project status and next steps
 
-The current implementation and remaining roadmap are summarized in [NEXT_STEPS.md](NEXT_STEPS.md). Contributions should keep matching local and rules-based unless they are explicitly working on the optional future local matching item.
+The current implementation and remaining roadmap are summarized in [NEXT_STEPS.md](NEXT_STEPS.md). See [CONTRIBUTING.md](CONTRIBUTING.md) for adapter, fixture, and wording-example guidance. Local AI matching is deferred to keep the extension lightweight.
