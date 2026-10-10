@@ -1,0 +1,23 @@
+﻿{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Job Autofill answers",
+  "type": "object", "additionalProperties": false,
+  "required": ["profile", "facts", "answers"],
+  "properties": {
+    "_instructions": { "type": "string", "description": "Edit this file, then import it in Job Autofill settings." },
+    "profile": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "firstName": { "type": "string" }, "lastName": { "type": "string" }, "email": { "type": "string" }, "phone": { "type": "string" },
+        "address": { "type": "string" }, "city": { "type": "string" }, "state": { "type": "string" }, "zip": { "type": "string" }, "country": { "type": "string" },
+        "linkedin": { "type": "string" }, "github": { "type": "string" }, "website": { "type": "string" }, "school": { "type": "string" },
+        "degree": { "type": "string" }, "major": { "type": "string" }, "gradYear": { "type": ["string", "number"] }
+      }
+    },
+    "facts": { "type": "object", "description": "Common yes/no facts, plus optional salary or demographic answers.", "additionalProperties": { "type": ["string", "number", "boolean"] } },
+    "answers": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["questions", "type", "answer"], "properties": {
+      "questions": { "type": "array", "minItems": 1, "items": { "type": "string" } }, "type": { "enum": ["text", "choice", "yesno"] },
+      "answer": { "type": ["string", "boolean"] }, "sensitive": { "type": "boolean" }
+    } } }
+  }
+}

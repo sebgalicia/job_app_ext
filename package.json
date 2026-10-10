@@ -1,0 +1,27 @@
+﻿{
+  "name": "job-autofill",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private, rules-based job application autofill for Firefox and Zen",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "test": "vitest run",
+    "score": "tsx scripts/score.ts",
+    "lint:extension": "web-ext lint --source-dir dist --ignore-files '**/*.map'",
+    "lint": "npm run build && npm run lint:extension"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/papaparse": "^5.3.15",
+    "ajv": "^8.17.1",
+    "ajv-cli": "^5.0.0",
+    "ajv-formats": "^3.0.1",
+    "esbuild": "^0.24.2",
+    "papaparse": "^5.4.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "web-ext": "^8.3.0"
+  }
+}
