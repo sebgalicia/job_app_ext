@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { chooseAdapter } from '../src/adapters';
 import { ariaComboboxOptions } from '../src/adapters/field';
 
-function documentOn(hostname: string, hasGreenhouseQuestion = false, hasWorkdayMarker = false): Document {
+function documentOn(
+  hostname: string,
+  hasGreenhouseQuestion = false,
+  fixtureAdapter?: 'workday' | 'lever' | 'ashby',
+): Document {
   return {
     location: { hostname },
     querySelector: (selector: string) => (hasGreenhouseQuestion && selector.includes('.field'))
-      || (hasWorkdayMarker && selector.includes('applicationForm')) ? {} : null,
+      || (fixtureAdapter === 'workday' && selector.includes('applicationForm'))
+      || (fixtureAdapter === 'lever' && selector.includes('lever-application-form'))
+      || (fixtureAdapter === 'ashby' && selector.includes('ashby-application-form')) ? {} : null,
   } as unknown as Document;
 }
 
@@ -14,11 +20,15 @@ describe('adapter selection', () => {
   it('uses the Workday adapter on Workday application hosts', () => {
     expect(chooseAdapter(documentOn('acme.myworkdayjobs.com')).name).toBe('workday');
     expect(chooseAdapter(documentOn('acme.myworkday.com')).name).toBe('workday');
-    expect(chooseAdapter(documentOn('localhost', false, true)).name).toBe('workday');
+    expect(chooseAdapter(documentOn('localhost', false, 'workday')).name).toBe('workday');
   });
 
   it('keeps Greenhouse markup on its adapter and other hosts generic', () => {
     expect(chooseAdapter(documentOn('boards.greenhouse.io', true)).name).toBe('greenhouse');
+    expect(chooseAdapter(documentOn('jobs.lever.co')).name).toBe('lever');
+    expect(chooseAdapter(documentOn('jobs.ashbyhq.com')).name).toBe('ashby');
+    expect(chooseAdapter(documentOn('localhost', false, 'lever')).name).toBe('lever');
+    expect(chooseAdapter(documentOn('localhost', false, 'ashby')).name).toBe('ashby');
     expect(chooseAdapter(documentOn('careers.example.com')).name).toBe('generic');
   });
 });

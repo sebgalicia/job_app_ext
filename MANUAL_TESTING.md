@@ -2,7 +2,7 @@
 
 Use Firefox 140 or newer and a private test answers file. Avoid putting real personal information in fixture tests. Build and load the extension using the [README development setup](README.md#development-setup).
 
-Start the local fixture server with `npm run serve:fixtures`, open `http://127.0.0.1:4173/workday-form.html`, and grant access with the popup's **Enable on this page** action. Also try an actual supported job board if you have a test application available. A fixture is useful for repeatable checks, but does not prove compatibility with every site's production form.
+Start the local fixture server with `npm run serve:fixtures`, open a fixture page (for example, `http://127.0.0.1:4173/lever-form.html`), and grant access with the popup's **Enable on this page** action. Also try an actual supported job board if you have a test application available. A fixture is useful for repeatable checks, but does not prove compatibility with every site's production form.
 
 ## Focus and text fields
 
@@ -31,6 +31,8 @@ Start the local fixture server with `npm run serve:fixtures`, open `http://127.0
 - [ ] The toolbar popup can enable and disable previews for a site.
 - [ ] On an unsupported site, previews begin only after granting access from **Enable on this page**.
 - [ ] The Greenhouse iframe fixture detects and previews fields inside the embedded form.
+- [ ] The Lever fixture uses the question wrapper label and previews its text fields.
+- [ ] The Ashby fixture uses the application field label and previews its text fields.
 - [ ] On a Workday application, the dedicated adapter uses the field's label and suggests the right answer; verify Tab and Enter behavior on any Workday custom dropdown you can access.
 - [ ] In the Workday fixture, moving to the second step and focusing its question still produces the right preview.
 - [ ] Disabling a site removes any active preview and stops further previews.

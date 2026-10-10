@@ -23,7 +23,7 @@ npx web-ext run --source-dir dist
 
 You can also load it manually in Firefox: open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on...**, and select `dist/manifest.json`. The extension requires Firefox 140 or newer. Rebuild after changing static HTML, CSS, or the answer schema.
 
-To open the local test forms, start the fixture server in another terminal with `npm run serve:fixtures`, then visit `http://127.0.0.1:4173/workday-form.html`. Since localhost is not a built-in supported host, click the extension toolbar button and choose **Enable on this page** to grant access for that tab.
+To open the local test forms, start the fixture server in another terminal with `npm run serve:fixtures`, then visit `http://127.0.0.1:4173/workday-form.html` (or `lever-form.html` / `ashby-form.html`). Since localhost is not a built-in supported host, click the extension toolbar button and choose **Enable on this page** to grant access for that tab. These static fixtures exercise adapter label handling; they do not prove compatibility with every production ATS form.
 
 ## Answers file
 
