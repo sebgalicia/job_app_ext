@@ -57,4 +57,12 @@ To inspect matcher behavior with a private answers file:
 npm run score -- --answers answers.json --input questions.csv --out results.csv
 ```
 
+To compare the experimental local embedding ranker with the rules matcher on labeled examples:
+
+```sh
+npm run evaluate:embeddings -- --answers answers.json --input questions.csv --out embedding-results.csv
+```
+
+This downloads the model for local development into the operating system's temporary directory. It is not part of the extension build. Keep personal answers and question wordings out of committed files.
+
 Do not commit personal answers or generated result files.

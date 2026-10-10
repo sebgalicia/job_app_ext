@@ -89,9 +89,23 @@ for cutoff in [0.60, 0.65, 0.70, 0.72, 0.75, 0.80, 0.85]:
 
 When rows have expected option labels, compare `chosen_option` with `expected_value` separately to evaluate option selection.
 
+### Experimental local embedding evaluation
+
+The developer-only `evaluate:embeddings` command compares a local sentence-embedding model with the existing rules matcher on the same labeled question CSV. It reads question wordings from the selected answers file, but it does not use or transmit saved answer values. The first run downloads the public model into the operating system's temporary directory; running this experiment does not bundle the model into the extension. Do not put private questions or personal answer files in committed fixtures.
+
+```sh
+npm run evaluate:embeddings -- --answers template.json --input questions.csv --out embedding-results.csv
+```
+
+The CSV reports each method's best answer key and whether it matched the expected key. The command also prints top-one and top-two accuracy, model loading and inference time, a Node process memory estimate, and the size of the cached model files. This initial experiment uses `Xenova/all-MiniLM-L6-v2` with int8 weights. On this repository's sample data (31 labeled questions), it ranked the expected key first for 30 questions versus 28 for rules matching, and had the expected key in its top two for all 31. It also confused a sponsorship question with work authorization once. This small sample is not enough to set a production confidence threshold. Embeddings must not override the existing topic and polarity checks for yes/no facts, and Node memory measurements do not substitute for Firefox profiling.
+
+Transformers.js is a development-only dependency for this experiment. The extension build does not include it, and this evaluation does not implement or enable AI matching in the extension.
+
 ## Privacy
 
-Imported answers, site preferences, company and role context, matching thresholds, the automatic filling preference, and any opt-in tracked applications are saved in `browser.storage.local` on this device. The extension does not transmit this data. You can remove it by clearing the extension’s local storage or removing the extension. No analytics or remote matching service is used.
+Imported answers, site preferences, company and role context, matching thresholds, the automatic filling preference, and any opt-in tracked applications are saved in `browser.storage.local` on this device. The extension does not transmit this data. You can remove it by clearing the extension's local storage or removing the extension. No analytics or remote matching service is used.
+
+The extension runtime makes no model requests. If you explicitly run the developer-only embedding evaluation above, it downloads a public model file; the evaluation does not upload the answers file or question wording.
 
 See [PRIVACY.md](PRIVACY.md) for the short privacy statement.
 
