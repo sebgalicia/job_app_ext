@@ -1,0 +1,45 @@
+question,options,expected_key,expected_value
+Why do you want to work here?,,,
+What is your preferred work location?,Boston|New York,answers[1],Boston
+Will you now or in the future require sponsorship?,Yes|No,answers[3],No
+Will you at any point require visa sponsorship?,Yes|No,answers[3],No
+Do you require employer sponsorship?,Yes|No,answers[3],No
+Can you work in the US without sponsorship?,Yes|No,answers[3],Yes
+Do you not require visa support?,Yes|No,answers[3],Yes
+I do not need sponsorship,Yes|No,answers[3],Yes
+I will not require sponsorship,Yes|No,answers[3],Yes
+Will you never need an immigration sponsor?,Yes|No,answers[3],Yes
+Are you able to work without visa sponsorship?,Yes|No,answers[3],Yes
+Do you need no sponsorship?,Yes|No,answers[3],Yes
+Would you need sponsorship later?,Yes|No,answers[3],No
+Do you currently need sponsorship?,Yes|No,answers[3],No
+Will your employer need to sponsor your work visa?,Yes|No,answers[3],No
+Are you requiring sponsorship?,Yes|No,answers[3],No
+Can you confirm sponsorship is needed?,Yes|No,answers[3],No
+Have you needed visa sponsorship before?,Yes|No,answers[3],No
+I would not need visa sponsorship,Yes|No,answers[3],Yes
+Would you ever need immigration support?,Yes|No,answers[3],No
+Are you authorized to work in the United States?,Yes|No,answers[2],Yes
+Are you legally authorized to work here?,Yes|No,answers[2],Yes
+Are you eligible to work in this country?,Yes|No,answers[2],Yes
+Do you have the right to work in the US?,Yes|No,answers[2],Yes
+Are you not authorized to work here?,Yes|No,answers[2],No
+Are you not legally eligible to work?,Yes|No,answers[2],No
+Are you unauthorized to work in the US?,Yes|No,answers[2],No
+Do you lack work authorization?,Yes|No,answers[2],No
+Are you legally permitted to work?,Yes|No,answers[2],Yes
+Are you not permitted to work here?,Yes|No,answers[2],No
+Are you authorized to work without restriction?,Yes|No,answers[2],Yes
+Are you eligible for employment in the United States?,Yes|No,answers[2],Yes
+Are you willing to relocate for this position?,Yes|No,,Yes
+Would you relocate for the right role?,Yes|No,,Yes
+Are you open to relocating?,Yes|No,,Yes
+Are you not willing to relocate?,Yes|No,,No
+I do not want to relocate,Yes|No,,No
+Would you move to another location?,Yes|No,,Yes
+Are you unable to relocate?,Yes|No,,No
+Can you relocate if needed?,Yes|No,,Yes
+Are you over 18 years old?,Yes|No,,Yes
+Are you at least 18 years of age?,Yes|No,,Yes
+Are you not over 18?,Yes|No,,No
+Are you under 18 years old?,Yes|No,,No

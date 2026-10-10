@@ -46,6 +46,41 @@ Yes/no facts such as sponsorship, work authorization, relocation, and age use to
 
 Review previews before accepting them. The extension previews one suggestion at a time; it does not submit applications or fill the whole page automatically.
 
+## Evaluate question matching
+
+The scoring CLI first builds the extension (including its generated JSON validator), then runs the same question matcher and yes/no polarity rules used by the extension against a CSV of sample questions. It does not call an AI service. Run it with an answers file and an input CSV:
+
+```sh
+npm run score -- --answers answers.json --input questions.csv --out results.csv
+```
+
+`questions.csv` must have a `question` column. An optional `options` column contains choices separated by `|`. Optional `expected_key` values identify the expected answer entry (for example, `answers[3]`); `expected_value` can hold the expected selected option label. The CLI copies either expected column into `results.csv` unchanged. `questions.csv` in this repository includes tricky example wording for sponsorship, work authorization, relocation, and age questions.
+
+The results include the best and runner-up answer keys and scores, confidence, any detected yes/no topic and polarity flips, and the option the shared choice logic selected. Scores help inspect errors; they are similarity scores, not probabilities. Rows with an empty `expected_key` are unlabeled and should not be included in answer-key accuracy calculations.
+
+For example, use pandas to calculate labeled answer-key accuracy by detected topic:
+
+```python
+import pandas as pd
+
+results = pd.read_csv("results.csv")
+labeled = results[results["expected_key"].notna() & results["expected_key"].ne("")].copy()
+labeled["correct"] = labeled["best_key"] == labeled["expected_key"]
+print(labeled.groupby("detected_topic")["correct"].agg(["mean", "count"]))
+```
+
+To explore a stricter high-confidence cutoff, sweep the saved best scores and compare both accuracy and coverage. This analysis does not change the extension settings:
+
+```python
+for cutoff in [0.60, 0.65, 0.70, 0.72, 0.75, 0.80, 0.85]:
+    accepted = labeled[labeled["best_score"] >= cutoff]
+    accuracy = accepted["correct"].mean() if len(accepted) else float("nan")
+    coverage = len(accepted) / len(labeled) if len(labeled) else 0
+    print(f"{cutoff:.2f}: accuracy={accuracy:.3f}, coverage={coverage:.3f}")
+```
+
+When rows have expected option labels, compare `chosen_option` with `expected_value` separately to evaluate option selection.
+
 ## Privacy
 
 Imported answers, site preferences, company and role context, matching thresholds, and any opt-in tracked applications are saved in `browser.storage.local` on this device. The extension does not transmit this data. You can remove it by clearing the extension’s local storage or removing the extension. No analytics or remote matching service is used.
