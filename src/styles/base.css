@@ -51,3 +51,16 @@ button {
 .success {
   color: #18794e;
 }
+
+input[data-job-autofill-preview="normal"]::placeholder,
+textarea[data-job-autofill-preview="normal"]::placeholder {
+  color: #7c8490;
+  opacity: 1;
+}
+
+input[data-job-autofill-preview="highlighted"]::placeholder,
+textarea[data-job-autofill-preview="highlighted"]::placeholder {
+  color: #8a5a00;
+  opacity: 1;
+  text-decoration: underline dotted;
+}

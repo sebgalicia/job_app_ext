@@ -5,6 +5,8 @@ export type DetectedField = {
   question: string;
   questionParts: string[];
   fieldType: 'text' | 'choice' | 'yesno';
+  inputType?: string;
+  autocomplete?: string;
   groupSize: number;
   optionLabels: string[];
 };
@@ -47,6 +49,8 @@ export function describeFocusedField(
     question: questionParts.join(' '),
     questionParts,
     fieldType,
+    inputType: field instanceof HTMLInputElement ? field.type : undefined,
+    autocomplete: field.getAttribute('autocomplete') ?? undefined,
     groupSize: members.length,
     optionLabels,
   };
