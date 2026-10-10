@@ -17,3 +17,37 @@ main {
 h1 {
   font-size: 1.25rem;
 }
+
+section {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+}
+
+label,
+input {
+  display: block;
+  margin-block: 0.5rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+
+button {
+  min-height: 2.5rem;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+}
+
+.errors,
+.error {
+  color: #b42318;
+}
+
+.success {
+  color: #18794e;
+}

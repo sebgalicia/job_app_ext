@@ -9,7 +9,21 @@
   <body>
     <main>
       <h1>Job Autofill settings</h1>
-      <p>Answer import and matching settings will be added in later steps.</p>
+      <p>Import your answers file. It is validated before being saved on this device.</p>
+
+      <section aria-labelledby="answers-heading">
+        <h2 id="answers-heading">Saved answers</h2>
+        <p id="saved-state">Checking local storage…</p>
+        <label for="answers-file">Choose an answers JSON file</label>
+        <input id="answers-file" type="file" accept="application/json,.json">
+        <div class="actions">
+          <button id="import-button" type="button">Validate and import</button>
+          <button id="export-button" type="button" disabled>Export saved answers</button>
+        </div>
+        <div id="import-status" role="status" aria-live="polite"></div>
+        <ul id="validation-errors" class="errors" aria-label="Validation errors"></ul>
+      </section>
     </main>
+    <script src="settings.js"></script>
   </body>
 </html>

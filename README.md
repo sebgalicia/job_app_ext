@@ -4,7 +4,7 @@ A lightweight Firefox and Zen extension for previewing answers from a private, u
 
 ## Current status
 
-The project foundation and answer validation are in place: a Firefox extension manifest, TypeScript/esbuild build pipeline, starter popup and settings pages, an example answers file, its JSON Schema, and build-time generated Ajv validation. Form detection, answer import, matching, and previews are not implemented yet.
+The extension can import and export an answers JSON file from its settings page. Imports are validated before being saved to local browser storage. The form detection, matching, and preview features are not implemented yet.
 
 ## Development setup
 
@@ -19,7 +19,7 @@ The generated extension is in `dist/`. To load it in Firefox, open `about:debugg
 
 ## Answers file
 
-`template.json` is a starter file. Make a private copy and edit its `profile`, `facts`, and `answers` sections. `answers.schema.json` provides editor hints and validation for that format. The settings page does not import answers yet.
+`template.json` is a starter file. Make a private copy and edit its `profile`, `facts`, and `answers` sections. `answers.schema.json` provides editor hints and validation for that format. Open the extension settings page to import the file; invalid files show errors and are not saved. Use **Export saved answers** to download the current local copy.
 
 ## Privacy
 
