@@ -8,7 +8,7 @@ Thanks for helping improve Job Autofill. The project is a small Firefox/Zen exte
 - Do not overwrite a field that already has an answer or a real choice selected.
 - Keep automatic filling opt-in and limited to the visible application step. Never add background scanning of unrelated pages.
 - Prefer the generic adapter. Add ATS-specific code only to fix a demonstrated label or page-structure issue.
-- Keep dependencies small. Local AI matching is deferred; do not add an ML library or model without revisiting that decision.
+- Keep dependencies small. Optional local AI matching is planned, but do not add an ML library or model until its match quality, Firefox load time, memory use, and delivery size have been measured. Never send answer data or form questions to a remote service.
 
 ## Add or update an adapter
 

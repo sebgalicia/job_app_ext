@@ -31,9 +31,9 @@ To open the local test forms, start the fixture server in another terminal with 
 
 ## How answer matching works
 
-The extension uses local, rule-based matching. It does not use an AI model or send form questions to a service. When you focus an empty supported field, it gathers the available question text (such as labels and accessible names) and compares it with the wording attached to your saved answers. It uses the best matching wording for each answer.
+The current extension uses local, rule-based matching. It does not use an AI model or send form questions to a service. When you focus an empty supported field, it gathers the available question text (such as labels and accessible names) and compares it with the wording attached to your saved answers. It uses the best matching wording for each answer.
 
-The Local AI matching control in Settings is a disabled placeholder only. It does not load an AI model or participate in scoring.
+Optional local AI matching is planned behind an off-by-default setting. It is not implemented yet, so the Local AI matching control in Settings remains disabled and has no effect on scoring. The planned AI path will load only when enabled and needed, and will supplement weaker rules matches while leaving high-confidence rules matches unchanged. The project will measure model size and Firefox memory use before choosing whether the model ships with the extension or downloads after opt-in.
 
 Before comparing, matching lowercases the text, removes punctuation and common filler words, lightly normalizes word endings, and treats a small built-in set of terms as synonyms. For example, “job title” and “position” can be related. It then combines three similarity measures: weighted word overlap, shared unique words, and character patterns that can tolerate some typos. These are heuristics; unusual wording can still match incorrectly or fail to match.
 
@@ -105,4 +105,4 @@ Build and package the generated `dist/` directory with `npx web-ext build --sour
 
 ## Project status and next steps
 
-The current implementation and remaining roadmap are summarized in [NEXT_STEPS.md](NEXT_STEPS.md). See [CONTRIBUTING.md](CONTRIBUTING.md) for adapter, fixture, and wording-example guidance. Local AI matching is deferred to keep the extension lightweight.
+The current implementation and remaining roadmap are summarized in [NEXT_STEPS.md](NEXT_STEPS.md). See [CONTRIBUTING.md](CONTRIBUTING.md) for adapter, fixture, and wording-example guidance.
