@@ -1,6 +1,6 @@
 export interface FormAdapter {
   readonly name: string;
-  questionParts(field: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): string[];
+  questionParts(field: HTMLElement): string[];
 }
 
 function addUnique(parts: string[], value: string | null | undefined): void {
@@ -27,11 +27,14 @@ function precedingText(field: HTMLElement): string | undefined {
 export class GenericAdapter implements FormAdapter {
   readonly name = 'generic';
 
-  questionParts(field: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): string[] {
+  questionParts(field: HTMLElement): string[] {
     const parts: string[] = [];
     const isChoiceOption = field instanceof HTMLInputElement && ['radio', 'checkbox'].includes(field.type);
     if (!isChoiceOption) {
-      for (const label of Array.from(field.labels ?? [])) addUnique(parts, textOf(label));
+      const labels = field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement
+        ? Array.from(field.labels ?? [])
+        : [];
+      for (const label of labels) addUnique(parts, textOf(label));
     }
     addUnique(parts, field.getAttribute('aria-label'));
 

@@ -4,8 +4,9 @@ import { WorkdayAdapter } from './workday';
 
 export function chooseAdapter(document: Document): FormAdapter {
   const hostname = document.location?.hostname.toLocaleLowerCase() ?? '';
-  if (hostname === 'myworkdayjobs.com' || hostname.endsWith('.myworkdayjobs.com')
-    || hostname === 'myworkday.com' || hostname.endsWith('.myworkday.com')) {
+  const isWorkdayHost = hostname === 'myworkdayjobs.com' || hostname.endsWith('.myworkdayjobs.com')
+    || hostname === 'myworkday.com' || hostname.endsWith('.myworkday.com');
+  if (isWorkdayHost || document.querySelector('[data-automation-id="applicationForm"]')) {
     return new WorkdayAdapter();
   }
   return document.querySelector('.field, .application-question, [data-qa="question"]')

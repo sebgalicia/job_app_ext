@@ -5,7 +5,7 @@ export class GreenhouseAdapter implements FormAdapter {
   readonly name = 'greenhouse';
   private readonly generic = new GenericAdapter();
 
-  questionParts(field: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): string[] {
+  questionParts(field: HTMLElement): string[] {
     const parts = this.generic.questionParts(field);
     const wrapper = field.closest('.field, .application-question, [data-qa="question"]');
     const greenhouseLabel = wrapper?.querySelector('.label, label, legend, [data-qa="question-label"]');

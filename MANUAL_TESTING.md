@@ -2,7 +2,7 @@
 
 Use Firefox 140 or newer and a private test answers file. Avoid putting real personal information in fixture tests. Build and load the extension using the [README development setup](README.md#development-setup).
 
-The fixtures in `fixtures/` can be served from localhost and enabled with the popup's **Enable on this page** action. Also try an actual supported job board if you have a test application available. A fixture is useful for repeatable checks, but does not prove compatibility with every site's production form.
+Start the local fixture server with `npm run serve:fixtures`, open `http://127.0.0.1:4173/workday-form.html`, and grant access with the popup's **Enable on this page** action. Also try an actual supported job board if you have a test application available. A fixture is useful for repeatable checks, but does not prove compatibility with every site's production form.
 
 ## Focus and text fields
 
@@ -17,6 +17,7 @@ The fixtures in `fixtures/` can be served from localhost and enabled with the po
 ## Choices and sensitive answers
 
 - [ ] A blank or placeholder native select can show a suggested option.
+- [ ] An expanded ARIA combobox with a visible `role="listbox"` and `role="option"` entries shows a suggestion; collapsed or unsupported custom widgets are left alone.
 - [ ] A select with an already chosen real option is never previewed or changed.
 - [ ] Radio and checkbox groups show a clear suggestion without selecting it immediately.
 - [ ] Tab accepts a normal choice preview; Enter accepts a highlighted or sensitive preview; Tab does not accept a highlighted preview.
@@ -31,6 +32,7 @@ The fixtures in `fixtures/` can be served from localhost and enabled with the po
 - [ ] On an unsupported site, previews begin only after granting access from **Enable on this page**.
 - [ ] The Greenhouse iframe fixture detects and previews fields inside the embedded form.
 - [ ] On a Workday application, the dedicated adapter uses the field's label and suggests the right answer; verify Tab and Enter behavior on any Workday custom dropdown you can access.
+- [ ] In the Workday fixture, moving to the second step and focusing its question still produces the right preview.
 - [ ] Disabling a site removes any active preview and stops further previews.
 
 ## Settings and local data

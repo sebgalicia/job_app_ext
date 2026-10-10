@@ -1,7 +1,7 @@
 import { defaultThresholds, matchQuestion, scoreSimilarity, validThresholds, type MatchCandidate, type Thresholds } from '../matching/matcher';
 import { normalizeText } from '../matching/normalize';
 import { chooseFactOption, detectPolarity, type ChoiceOption } from '../matching/polarity';
-import type { DetectedField } from '../adapters/field';
+import { ariaComboboxOptions, type DetectedField } from '../adapters/field';
 
 type StoredAnswers = {
   profile?: Record<string, string | number | undefined>;
@@ -17,8 +17,8 @@ type StorageBrowser = {
   runtime: { sendMessage(message: Record<string, unknown>): Promise<unknown> };
 };
 type PreviewField = HTMLInputElement | HTMLTextAreaElement;
-type PreviewTarget = PreviewField | HTMLSelectElement;
-type SelectChoice = ChoiceOption & { element: HTMLOptionElement };
+type PreviewTarget = HTMLElement;
+type SelectChoice = ChoiceOption & { element: HTMLElement };
 
 const profileQuestions: Record<string, string[]> = {
   firstName: ['first name', 'given name', 'your first name'],
@@ -214,12 +214,19 @@ export function chooseSavedAnswerOption<T extends ChoiceOption>(
   return veryHighQuestionConfidence ? chooseGeneralizedOption(answer, options) : undefined;
 }
 
-function focusedChoices(target: HTMLInputElement | HTMLSelectElement): SelectChoice[] {
+function focusedChoices(target: HTMLElement): SelectChoice[] {
+  if (target.getAttribute('role') === 'combobox') {
+    return ariaComboboxOptions(target).map((option) => {
+      const label = (option.getAttribute('aria-label') || option.textContent || '').replace(/\s+/g, ' ').trim();
+      return { label, value: option.getAttribute('data-value') || option.getAttribute('value') || label, element: option };
+    }).filter((option) => Boolean(option.label) && !isPlaceholderOption(option.label, option.value ?? ''));
+  }
   if (target instanceof HTMLSelectElement) {
     return Array.from(target.options)
       .filter((option) => !option.disabled && !isPlaceholderOption(option.label || option.textContent || '', option.value))
       .map((option) => ({ label: (option.label || option.textContent || '').trim(), value: option.value, element: option }));
   }
+  if (!(target instanceof HTMLInputElement) || !['radio', 'checkbox'].includes(target.type)) return [];
   const type = target.type;
   const controls = target.name
     ? Array.from((target.form ?? target.ownerDocument).querySelectorAll<HTMLInputElement>(`input[type="${type}"]`)).filter((input) => input.name === target.name)
@@ -230,11 +237,17 @@ function focusedChoices(target: HTMLInputElement | HTMLSelectElement): SelectCho
   }).filter((option) => Boolean(option.label));
 }
 
-function hasRealChoice(target: HTMLInputElement | HTMLSelectElement): boolean {
+function hasRealChoice(target: HTMLElement): boolean {
+  if (target.getAttribute('role') === 'combobox') {
+    if (target instanceof HTMLInputElement) return target.value.trim().length > 0;
+    const currentValue = (target.getAttribute('aria-valuetext') || target.getAttribute('data-value') || target.textContent || '').trim();
+    return Boolean(currentValue && !isPlaceholderOption(currentValue, 'has-value'));
+  }
   if (target instanceof HTMLSelectElement) {
     const selected = target.selectedOptions[0];
     return Boolean(selected && !isPlaceholderOption(selected.label || selected.textContent || '', selected.value));
   }
+  if (!(target instanceof HTMLInputElement) || !['radio', 'checkbox'].includes(target.type)) return false;
   const type = target.type;
   const controls = target.name
     ? Array.from((target.form ?? target.ownerDocument).querySelectorAll<HTMLInputElement>(`input[type="${type}"]`)).filter((input) => input.name === target.name)
@@ -306,13 +319,13 @@ function getStoredChoice(
   };
 }
 
-function dispatchNativeChoiceChange(element: HTMLInputElement | HTMLSelectElement): void {
+function dispatchNativeChoiceChange(element: HTMLElement): void {
   element.dispatchEvent(new Event('input', { bubbles: true }));
   element.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 function installChoicePreview(
-  target: HTMLInputElement | HTMLSelectElement,
+  target: HTMLElement,
   option: SelectChoice,
   highlighted: boolean,
 ): void {
@@ -321,13 +334,14 @@ function installChoicePreview(
   const suggestion = document.createElement('span');
   suggestion.className = `job-autofill-choice-hint${highlighted ? ' is-highlighted' : ''}`;
   suggestion.textContent = `Suggested: ${option.label}`;
-  let visualTarget: HTMLElement = target;
+  let visualTarget: HTMLElement = target.getAttribute('role') === 'combobox' ? option.element : target;
   if (target instanceof HTMLInputElement) {
     visualTarget = target.labels?.[0] ?? target;
   }
   visualTarget.classList.add('job-autofill-option-preview');
   if (highlighted) visualTarget.classList.add('is-highlighted');
-  visualTarget.insertAdjacentElement('afterend', suggestion);
+  const hintTarget = target.getAttribute('role') === 'combobox' ? target : visualTarget;
+  hintTarget.insertAdjacentElement('afterend', suggestion);
 
   const restore = () => {
     visualTarget.classList.remove('job-autofill-option-preview');
@@ -342,9 +356,12 @@ function installChoicePreview(
     if (hasRealChoice(target)) return;
     restore();
     activePreview = undefined;
-    if (target instanceof HTMLSelectElement) {
+    if (target.getAttribute('role') === 'combobox') {
+      option.element.click();
+      dispatchNativeChoiceChange(target);
+    } else if (target instanceof HTMLSelectElement) {
       const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
-      setter?.call(target, option.value ?? option.element.value);
+      setter?.call(target, option.value ?? (option.element instanceof HTMLOptionElement ? option.element.value : ''));
       dispatchNativeChoiceChange(target);
     } else {
       const chosen = option.element as unknown as HTMLInputElement;
@@ -363,7 +380,7 @@ function installChoicePreview(
   const onKeyDown: EventListener = (rawEvent) => {
     const event = rawEvent as KeyboardEvent;
     if (event.key === 'Escape') {
-      event.preventDefault();
+      if (target.getAttribute('role') !== 'combobox') event.preventDefault();
       restore();
       activePreview = undefined;
     } else if (event.key === 'Tab') {
@@ -384,14 +401,16 @@ function installChoicePreview(
   activePreview = { field: target, cleanup };
 }
 
-/** Preview a native select, radio group, or checkbox using saved choice answers and facts. */
+/** Preview a native choice or an expanded accessible single-select combobox. */
 export async function showChoicePreview(
-  target: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+  target: HTMLElement,
   descriptor: DetectedField,
 ): Promise<void> {
   clearActivePreview();
-  if (!(target instanceof HTMLSelectElement) && !(target instanceof HTMLInputElement)) return;
-  if (!(target instanceof HTMLSelectElement) && !['radio', 'checkbox'].includes(target.type)) return;
+  const isCombobox = target.getAttribute('role') === 'combobox';
+  if (!isCombobox && !(target instanceof HTMLSelectElement) && !(target instanceof HTMLInputElement)) return;
+  if (!isCombobox && !(target instanceof HTMLSelectElement) && !['radio', 'checkbox'].includes((target as HTMLInputElement).type)) return;
+  if (isCombobox && target.getAttribute('aria-expanded') !== 'true') return;
   if (hasRealChoice(target)) return;
 
   try {

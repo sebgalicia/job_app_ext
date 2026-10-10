@@ -5,7 +5,7 @@ export class WorkdayAdapter implements FormAdapter {
   readonly name = 'workday';
   private readonly generic = new GenericAdapter();
 
-  questionParts(field: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): string[] {
+  questionParts(field: HTMLElement): string[] {
     const parts = this.generic.questionParts(field);
     const wrapper = field.closest(
       '[data-automation-id="formField"], [data-automation-id="fieldSet"], [data-automation-id="question"]',

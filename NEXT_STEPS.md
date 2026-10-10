@@ -12,6 +12,6 @@ The MVP uses local, rules-based matching. It does not include an AI model. The f
 ## Current implementation notes
 
 - Greenhouse and a first-pass Workday question-label adapter are implemented; supported pages also have generic field detection.
-- The Workday adapter still needs real-site verification for custom controls, keyboard acceptance, and multi-step navigation. Lever and Ashby do not yet have dedicated adapters.
+- Expanded ARIA single-select comboboxes with an exposed listbox are handled generically. The Workday adapter still needs real-site verification for its custom controls, keyboard acceptance, and multi-step navigation. Lever and Ashby do not yet have dedicated adapters.
 - The Local AI matching control in Settings is disabled placeholder text. It does not load a model or affect matching.
 - The scoring CLI, test suite, and manual browser checklist are development tools; they do not change the extension's local-only runtime behavior.

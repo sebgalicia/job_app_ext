@@ -6,6 +6,7 @@
   <main data-automation-id="applicationForm">
     <h1>Software Engineer application at Example Company</h1>
     <form>
+      <section id="workday-step-one">
       <div data-automation-id="formField">
         <label data-automation-id="formField-label" for="workday-email">Email address</label>
         <input id="workday-email" name="email" type="email" autocomplete="email">
@@ -18,12 +19,35 @@
           <option value="remote">Remote</option>
         </select>
       </div>
+      <div data-automation-id="formField">
+        <span data-automation-id="formField-label">Preferred schedule</span>
+        <button type="button" role="combobox" aria-label="Preferred schedule" aria-expanded="true" aria-controls="workday-schedule-options">Choose a schedule</button>
+        <ul id="workday-schedule-options" role="listbox">
+          <li role="option" data-value="hybrid">Hybrid</li>
+          <li role="option" data-value="remote">Remote</li>
+        </ul>
+      </div>
       <fieldset data-automation-id="fieldSet">
         <legend>Are you authorized to work without restriction?</legend>
         <label><input type="radio" name="authorization" value="yes"> Yes</label>
         <label><input type="radio" name="authorization" value="no"> No</label>
       </fieldset>
+      <button id="workday-next" type="button">Next step</button>
+      </section>
+      <section id="workday-step-two" hidden>
+        <div data-automation-id="formField">
+          <label data-automation-id="formField-label" for="workday-motivation">Why are you interested in this role?</label>
+          <textarea id="workday-motivation" name="motivation"></textarea>
+        </div>
+      </section>
     </form>
   </main>
+  <script>
+    document.querySelector('#workday-next').addEventListener('click', () => {
+      document.querySelector('#workday-step-one').hidden = true;
+      document.querySelector('#workday-step-two').hidden = false;
+      document.querySelector('#workday-motivation').focus();
+    });
+  </script>
 </body>
 </html>

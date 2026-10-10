@@ -4,8 +4,10 @@ import { dismissActivePreview, saveDetectedPageContext, showChoicePreview, showT
 
 const supportedControls = 'input, textarea, select';
 
-function isEligibleControl(target: EventTarget | null): target is HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
-  if (!(target instanceof HTMLElement) || !target.matches(supportedControls)) return false;
+function isEligibleControl(target: EventTarget | null): target is HTMLElement {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.getAttribute('role') === 'combobox') return true;
+  if (!target.matches(supportedControls)) return false;
   if (target instanceof HTMLInputElement) {
     return ['text', 'email', 'tel', 'url', 'search', 'number', 'radio', 'checkbox'].includes(target.type);
   }
@@ -34,7 +36,9 @@ async function processFocusedControl(target: EventTarget | null): Promise<void> 
     document.dispatchEvent(new CustomEvent('job-autofill:question-detected', {
       detail: { ...descriptor, field: target },
     }));
-    if (descriptor.fieldType === 'text') await showTextPreview(target, descriptor);
+    if (descriptor.fieldType === 'text' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      await showTextPreview(target, descriptor);
+    }
     else await showChoicePreview(target, descriptor);
   } catch {
     // Form focus must keep working if extension storage is temporarily unavailable.
@@ -45,6 +49,14 @@ function handleFocus(event: FocusEvent): void {
   void processFocusedControl(event.target);
 }
 
+function refreshActiveCombobox(event: Event): void {
+  const eventTarget = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[role="combobox"]') : null;
+  const activeTarget = document.activeElement instanceof HTMLElement
+    && document.activeElement.getAttribute('role') === 'combobox' ? document.activeElement : null;
+  const target = eventTarget ?? activeTarget;
+  if (target) requestAnimationFrame(() => void processFocusedControl(target));
+}
+
 const installationFlag = '__jobAutofillContentInstalled';
 const contentWorld = globalThis as typeof globalThis & Record<string, unknown>;
 if (!contentWorld[installationFlag]) {
@@ -52,6 +64,8 @@ if (!contentWorld[installationFlag]) {
   const frameMessageFlag = '__jobAutofillFrameMessage';
   // Matched pages and user-enabled tabs remain idle until a form field receives focus.
   document.addEventListener('focusin', handleFocus);
+  document.addEventListener('click', refreshActiveCombobox);
+  document.addEventListener('keyup', refreshActiveCombobox);
 
   previewBrowser.runtime.onMessage.addListener((message) => {
     if (message.type === 'content-ping') return { ready: true };

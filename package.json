@@ -6,6 +6,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",
+    "serve:fixtures": "node scripts/serve-fixtures.mjs",
     "test": "npm run build && vitest run",
     "score": "npm run build && tsx scripts/score.ts",
     "lint:extension": "web-ext lint --source-dir dist --ignore-files '**/*.map'",

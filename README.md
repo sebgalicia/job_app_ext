@@ -23,6 +23,8 @@ npx web-ext run --source-dir dist
 
 You can also load it manually in Firefox: open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on...**, and select `dist/manifest.json`. The extension requires Firefox 140 or newer. Rebuild after changing static HTML, CSS, or the answer schema.
 
+To open the local test forms, start the fixture server in another terminal with `npm run serve:fixtures`, then visit `http://127.0.0.1:4173/workday-form.html`. Since localhost is not a built-in supported host, click the extension toolbar button and choose **Enable on this page** to grant access for that tab.
+
 ## Answers file
 
 `template.json` is a starter file. Make a private copy and edit its `profile`, `facts`, and `answers` sections. `answers.schema.json` provides editor hints and validation for that format. Open the extension settings page to import the file; invalid files show errors and are not saved. Use **Export saved answers** to download the current local copy.
