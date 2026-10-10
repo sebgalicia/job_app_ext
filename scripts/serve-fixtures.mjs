@@ -22,7 +22,7 @@ if (!Number.isInteger(fixturePort) || fixturePort < 1 || fixturePort > 65535) {
 }
 
 const server = createServer(async (request, response) => {
-  let filename: string;
+  let filename;
   try {
     filename = decodeURIComponent(new URL(request.url ?? '/', 'http://127.0.0.1').pathname).replace(/^\/+/, '');
   } catch {
