@@ -7,10 +7,11 @@ The MVP uses local, rules-based matching. It does not include an AI model. The f
 3. Optionally add local AI matching behind an off-by-default switch. Evaluate a small in-browser embedding model with Transformers.js; load it only on demand, release it after use, and measure real memory use in Firefox before documenting it. Use it only when rules matching falls below its threshold.
 4. Publish a listed release on addons.mozilla.org after an unlisted review and test release.
 5. Add a contribution guide for adapters and the wording test list.
+6. After the Firefox extension is complete and ready, port it to Chrome and verify browser API, permissions, and embedded-form behavior there.
 
 ## Current implementation notes
 
-- Greenhouse has a dedicated adapter; supported pages also have generic field detection.
-- Workday, Lever, and Ashby do not yet have dedicated adapters. Custom controls and multi-step navigation need real-site testing.
+- Greenhouse and a first-pass Workday question-label adapter are implemented; supported pages also have generic field detection.
+- The Workday adapter still needs real-site verification for custom controls, keyboard acceptance, and multi-step navigation. Lever and Ashby do not yet have dedicated adapters.
 - The Local AI matching control in Settings is disabled placeholder text. It does not load a model or affect matching.
 - The scoring CLI, test suite, and manual browser checklist are development tools; they do not change the extension's local-only runtime behavior.

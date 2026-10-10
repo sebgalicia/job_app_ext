@@ -30,6 +30,7 @@ The fixtures in `fixtures/` can be served from localhost and enabled with the po
 - [ ] The toolbar popup can enable and disable previews for a site.
 - [ ] On an unsupported site, previews begin only after granting access from **Enable on this page**.
 - [ ] The Greenhouse iframe fixture detects and previews fields inside the embedded form.
+- [ ] On a Workday application, the dedicated adapter uses the field's label and suggests the right answer; verify Tab and Enter behavior on any Workday custom dropdown you can access.
 - [ ] Disabling a site removes any active preview and stops further previews.
 
 ## Settings and local data
