@@ -25,6 +25,8 @@ The generated extension is in `dist/`. To load it in Firefox, open `about:debugg
 
 The extension uses local, rule-based matching. It does not use an AI model or send form questions to a service. When you focus an empty supported field, it gathers the available question text (such as labels and accessible names) and compares it with the wording attached to your saved answers. It uses the best matching wording for each answer.
 
+The Local AI matching control in Settings is a disabled placeholder only. It does not load an AI model or participate in scoring.
+
 Before comparing, matching lowercases the text, removes punctuation and common filler words, lightly normalizes word endings, and treats a small built-in set of terms as synonyms. For example, “job title” and “position” can be related. It then combines three similarity measures: weighted word overlap, shared unique words, and character patterns that can tolerate some typos. These are heuristics; unusual wording can still match incorrectly or fail to match.
 
 The **High confidence** and **Medium confidence** sliders control question-to-answer matching. Their defaults are `0.72` and `0.50`. Scores at or above High get a normal preview; scores from Medium up to High get a highlighted preview; lower scores produce no preview. Medium must stay below High. The score is a similarity score, not a probability that the answer is correct.
