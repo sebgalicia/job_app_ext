@@ -10,6 +10,9 @@ const fixtureNames = new Set([
   'greenhouse-iframe-parent.html',
   'lever-form.html',
   'ashby-form.html',
+  'icims-form.html',
+  'taleo-form.html',
+  'smartrecruiters-form.html',
   'workday-form.html',
 ]);
 const fixturePort = Number(process.env.FIXTURE_PORT ?? 4173);

@@ -36,7 +36,9 @@ function isSupportedHost(hostname: string): boolean {
   return hostname.endsWith('.myworkdayjobs.com') || hostname === 'myworkdayjobs.com'
     || hostname.endsWith('.myworkday.com') || hostname === 'myworkday.com'
     || hostname === 'boards.greenhouse.io' || hostname === 'job-boards.greenhouse.io'
-    || hostname === 'jobs.lever.co' || hostname === 'jobs.ashbyhq.com';
+    || hostname === 'jobs.lever.co' || hostname === 'jobs.ashbyhq.com'
+    || hostname.endsWith('.icims.com') || hostname.endsWith('.taleo.net')
+    || hostname.endsWith('.smartrecruiters.com');
 }
 
 function companyFromUrl(url: URL): string | undefined {
@@ -44,6 +46,7 @@ function companyFromUrl(url: URL): string | undefined {
   if (url.hostname.endsWith('.myworkdayjobs.com')) slug = url.hostname.split('.')[0];
   else if (url.hostname === 'boards.greenhouse.io' || url.hostname === 'job-boards.greenhouse.io') slug = url.pathname.split('/').filter(Boolean)[0];
   else if (['jobs.lever.co', 'jobs.ashbyhq.com'].includes(url.hostname)) slug = url.pathname.split('/').filter(Boolean)[0];
+  else if (url.hostname.endsWith('.smartrecruiters.com')) slug = url.pathname.split('/').filter(Boolean)[0];
   if (!slug) return undefined;
   return slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (letter) => letter.toLocaleUpperCase());
 }

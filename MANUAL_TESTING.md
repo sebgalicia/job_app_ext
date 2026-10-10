@@ -42,6 +42,7 @@ Start the local fixture server with `npm run serve:fixtures`, open a fixture pag
 - [ ] The Greenhouse iframe fixture detects and previews fields inside the embedded form.
 - [ ] The Lever fixture uses the question wrapper label and previews its text fields.
 - [ ] The Ashby fixture uses the application field label and previews its text fields.
+- [ ] The iCIMS, Taleo, and SmartRecruiters fixtures select their adapters and read standard labels.
 - [ ] On a Workday application, the dedicated adapter uses the field's label and suggests the right answer; verify Tab and Enter behavior on any Workday custom dropdown you can access.
 - [ ] In the Workday fixture, moving to the second step and focusing its question still produces the right preview.
 - [ ] Disabling a site removes any active preview and stops further previews.
