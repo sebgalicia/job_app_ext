@@ -38,9 +38,9 @@
         <h2 id="autofill-heading">Automatic filling</h2>
         <label class="switch-row" for="autofill-on-open">
           <input id="autofill-on-open" type="checkbox">
-          <span>Fill matching fields once when a page opens, then stop</span>
+          <span>Fill matching fields as each step opens, then wait</span>
         </label>
-        <p>When enabled, the extension makes one pass over visible, empty fields and fills answers with a Medium or High question match. After the pass, it stops responding on that page, including focus previews, until you reopen or reload the page. It does not submit the application. Review the filled fields before submitting.</p>
+        <p>When enabled, the extension fills visible, empty fields with a Medium or High question match when the page opens. It then waits for you to press a Next or Continue button before checking the newly shown step. It does not submit the application or show focus previews. Review the filled fields before submitting.</p>
         <p id="autofill-status" role="status" aria-live="polite"></p>
       </section>
 

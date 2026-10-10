@@ -17,9 +17,10 @@ Start the local fixture server with `npm run serve:fixtures`, open a fixture pag
 ## One-pass automatic filling
 
 - [ ] The setting is off by default and remains off after reinstall or with no saved preference.
-- [ ] When enabled, opening a supported application page fills visible, empty fields with Medium or High confidence matches once, then focus previews no longer appear on that page.
+- [ ] When enabled, opening a supported application page fills visible, empty fields with Medium or High confidence matches; focus previews do not appear in this mode.
 - [ ] Existing text and selected choices are never overwritten; low-confidence or missing-context answers stay empty.
-- [ ] The pass does not submit the form, continue filling fields added afterward, or react to later focus events.
+- [ ] The pass does not submit the form or react to focus events; after pressing Next/Continue, it fills visible, empty fields in the newly revealed step.
+- [ ] With automatic filling on, the Workday fixture's first step fills on load and its second step fills after pressing **Next step**.
 - [ ] Disabling the setting prevents automatic filling on subsequently opened pages.
 
 ## Choices and sensitive answers

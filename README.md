@@ -4,7 +4,7 @@ A lightweight Firefox and Zen extension for previewing answers from a private, u
 
 ## Current status
 
-The extension can import and export an answers JSON file from its settings page, detect fields on supported job boards, and preview matching text and choice answers. Its optional **Fill matching fields once when a page opens, then stop** setting makes one pass over visible, empty fields and fills matches at Medium confidence or above. After the pass, the extension stops responding on that page, including focus previews, until the page is reopened or reloaded. It does not submit the form. The setting is off by default; already-filled fields are left alone. The toolbar popup shows an editable company and role, a site on/off switch, and the number of matched fields in the current tab. You can opt in to tracking an application when saving its company and role; tracked entries remain in local browser storage and link back to the application page. Settings also let you tune the high and medium question-match thresholds. On other sites, use **Enable on this page** in the popup to grant temporary access for that tab.
+The extension can import and export an answers JSON file from its settings page, detect fields on supported job boards, and preview matching text and choice answers. Its optional **Fill matching fields as each step opens, then wait** setting fills visible, empty fields with Medium confidence or above when the page opens. On multi-step forms, it waits for you to press a Next or Continue button before checking the newly shown step. It does not submit the form or show focus previews while this mode is on. The setting is off by default; already-filled fields are left alone. The toolbar popup shows an editable company and role, a site on/off switch, and the number of matched fields in the current tab. You can opt in to tracking an application when saving its company and role; tracked entries remain in local browser storage and link back to the application page. Settings also let you tune the high and medium question-match thresholds. On other sites, use **Enable on this page** in the popup to grant temporary access for that tab.
 
 ## Development setup
 
@@ -52,7 +52,7 @@ Yes/no facts such as sponsorship, work authorization, relocation, and age use to
 - Medium-confidence and sensitive suggestions (including sponsorship, work authorization, salary, demographic, and entries marked `sensitive`) are highlighted. Press **Enter** to accept a highlighted suggestion; **Tab** moves on without accepting it.
 - `{company}` and `{role}` are filled from the popup’s detected or edited values. If either value is missing, the preview marks it and blocks acceptance until the value is supplied.
 
-Review previews before accepting them. With automatic filling off, the extension previews one suggestion at a time. With it on, the extension fills eligible fields once when the page opens and then stops responding on that page; review all filled values before submitting. It never submits applications.
+Review previews before accepting them. With automatic filling off, the extension previews one suggestion at a time. With it on, the extension fills eligible fields as each step opens and waits for you to press Next or Continue before checking another step; review all filled values before submitting. It never submits applications.
 
 ## Evaluate question matching
 

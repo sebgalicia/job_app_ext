@@ -23,6 +23,7 @@ const previewBrowser = (globalThis as typeof globalThis & { browser: {
 } }).browser;
 
 let pageAutomationStopped = false;
+let nextStepScanTimer: number | undefined;
 const onePassAutofillEnabled = previewBrowser.storage.local.get('autofillOnOpen')
   .then((stored) => stored.autofillOnOpen === true)
   .catch(() => false);
@@ -66,32 +67,53 @@ function refreshActiveCombobox(event: Event): void {
 async function autofillPageOnce(): Promise<void> {
   if (!await onePassAutofillEnabled) return;
   pageAutomationStopped = true;
+  let siteAllowsAutofill = false;
   try {
     const stored = await previewBrowser.storage.local.get('siteEnabled');
     const siteEnabled = stored.siteEnabled as Record<string, boolean> | undefined;
     if (siteEnabled?.[location.hostname] === false) return;
+    siteAllowsAutofill = true;
 
-    const adapter = chooseAdapter(document);
-    const controls = Array.from(document.querySelectorAll<HTMLElement>(`${supportedControls}, [role="combobox"]`));
-    const seenGroups = new Set<string>();
-    for (const control of controls) {
-      if (!isEligibleControl(control) || !control.isConnected || control.matches(':disabled, [readonly]')
-        || control.closest('[hidden], [aria-hidden="true"]') || control.getClientRects().length === 0) continue;
-      if (control instanceof HTMLInputElement && ['radio', 'checkbox'].includes(control.type) && control.name) {
-        const groupKey = `${control.type}:${control.form?.id ?? 'document'}:${control.name}`;
-        if (seenGroups.has(groupKey)) continue;
-        seenGroups.add(groupKey);
-      }
-      const descriptor = describeFocusedField(control, adapter);
-      if (descriptor.question) await autofillControl(control, descriptor);
-    }
+    await scanVisibleFieldsOnce();
   } catch {
     // A failed automatic pass remains contained to this page and does not submit the form.
   } finally {
     document.removeEventListener('focusin', handleFocus);
     document.removeEventListener('click', refreshActiveCombobox);
     document.removeEventListener('keyup', refreshActiveCombobox);
+    if (siteAllowsAutofill) document.addEventListener('click', handleStepAdvance);
   }
+}
+
+async function scanVisibleFieldsOnce(): Promise<void> {
+  const adapter = chooseAdapter(document);
+  const controls = Array.from(document.querySelectorAll<HTMLElement>(`${supportedControls}, [role="combobox"]`));
+  const seenGroups = new Set<string>();
+  for (const control of controls) {
+    if (!isEligibleControl(control) || !control.isConnected || control.matches(':disabled, [readonly]')
+      || control.closest('[hidden], [aria-hidden="true"]') || control.getClientRects().length === 0) continue;
+    if (control instanceof HTMLInputElement && ['radio', 'checkbox'].includes(control.type) && control.name) {
+      const groupKey = `${control.type}:${control.form?.id ?? 'document'}:${control.name}`;
+      if (seenGroups.has(groupKey)) continue;
+      seenGroups.add(groupKey);
+    }
+    const descriptor = describeFocusedField(control, adapter);
+    if (descriptor.question) await autofillControl(control, descriptor);
+  }
+}
+
+function handleStepAdvance(event: MouseEvent): void {
+  if (!event.isTrusted || !pageAutomationStopped || !(event.target instanceof Element)) return;
+  const action = event.target.closest<HTMLElement>('button, input[type="submit"], input[type="button"], [role="button"], a');
+  if (!action) return;
+  const label = (action.getAttribute('aria-label') || action.textContent ||
+    (action instanceof HTMLInputElement ? action.value : '')).replace(/\s+/g, ' ').trim();
+  if (!/^(?:next(?:\s+(?:step|page))?|continue(?:\s+(?:to\s+)?(?:next\s+)?(?:step|page))?|save\s*(?:and|&)\s*continue)$/i.test(label)) return;
+  if (nextStepScanTimer !== undefined) window.clearTimeout(nextStepScanTimer);
+  nextStepScanTimer = window.setTimeout(() => {
+    nextStepScanTimer = undefined;
+    void scanVisibleFieldsOnce().catch(() => undefined);
+  }, 500);
 }
 
 const installationFlag = '__jobAutofillContentInstalled';
