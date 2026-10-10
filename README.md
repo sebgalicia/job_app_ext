@@ -15,7 +15,13 @@ npm install
 npm run build
 ```
 
-The generated extension is in `dist/`. To load it in Firefox, open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on…**, and select `dist/manifest.json`. The `web-ext run` workflow will be documented when the development scripts are ready.
+The generated extension is in `dist/`. To run it with web-ext, use:
+
+```sh
+npx web-ext run --source-dir dist
+```
+
+You can also load it manually in Firefox: open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on...**, and select `dist/manifest.json`. The extension requires Firefox 140 or newer. Rebuild after changing static HTML, CSS, or the answer schema.
 
 ## Answers file
 
@@ -85,6 +91,16 @@ When rows have expected option labels, compare `chosen_option` with `expected_va
 
 Imported answers, site preferences, company and role context, matching thresholds, and any opt-in tracked applications are saved in `browser.storage.local` on this device. The extension does not transmit this data. You can remove it by clearing the extension’s local storage or removing the extension. No analytics or remote matching service is used.
 
+See [PRIVACY.md](PRIVACY.md) for the short privacy statement.
+
+## Manual browser checks
+
+Automated tests cover individual logic, but do not replace trying the extension in Firefox. Follow the [manual test checklist](MANUAL_TESTING.md) before relying on it for real applications.
+
 ## Publishing
 
-The planned release process is to first publish an unlisted build on addons.mozilla.org for review, then publish a listed release. Packaging and signing instructions will be added before release.
+Build and package the generated `dist/` directory with `npx web-ext build --source-dir dist`. Submit the package through the [Firefox Add-ons Developer Hub](https://addons.mozilla.org/developers/) as an unlisted add-on first. Test the signed unlisted version, address review feedback, and then submit it for a listed release. Mozilla’s review and signing requirements may change, so follow the current instructions in the Developer Hub before submission.
+
+## Project status and next steps
+
+The current implementation and remaining roadmap are summarized in [NEXT_STEPS.md](NEXT_STEPS.md). Contributions should keep matching local and rules-based unless they are explicitly working on the optional future local matching item.
