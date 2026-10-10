@@ -125,4 +125,4 @@ You can sweep score cutoffs to compare accuracy with coverage. This analysis doe
 
 ## Publishing
 
-Build the package with `npx web-ext build --source-dir dist`. Submit it through the [Firefox Add-ons Developer Hub](https://addons.mozilla.org/developers/) as an unlisted add-on first, test the signed version, address review feedback, and then submit for a listed release. Check the current Developer Hub guidance before submission.
+Build the package with `npx web-ext build --source-dir dist`. It writes the ZIP archive to `web-ext-artifacts/`, which is ignored by Git. Submit it through the [Firefox Add-ons Developer Hub](https://addons.mozilla.org/developers/) as an unlisted add-on first, test the signed version, address review feedback, and then submit for a listed release. Check the current Developer Hub guidance before submission.

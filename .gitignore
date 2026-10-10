@@ -1,3 +1,4 @@
 node_modules/
 dist/
+web-ext-artifacts/
 src/generated/answers-validator.js
