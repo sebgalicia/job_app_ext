@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chooseEthnicityOption, chooseTextOption, ethnicityAliasKey, isPlaceholderOption } from '../src/preview/text-preview';
+import { chooseGeneralizedOption, chooseSavedAnswerOption, chooseTextOption, isPlaceholderOption } from '../src/preview/text-preview';
 
 describe('native choice preview matching', () => {
   it('treats empty and placeholder select options as empty', () => {
@@ -25,22 +25,28 @@ describe('native choice preview matching', () => {
     ])).toBeUndefined();
   });
 
-  it('maps SE Asian to Southeast Asian only for a high-confidence ethnicity question', () => {
-    const options = [
-      { label: 'East Asian', value: 'east' },
-      { label: 'Southeast Asian', value: 'southeast' },
-      { label: 'South Asian', value: 'south' },
-    ];
-    expect(ethnicityAliasKey('SE Asian')).toBe('southeast-asian');
-    expect(chooseEthnicityOption('What is your ethnicity?', ['What is your ethnicity?'], 'SE Asian', options, 'high').option?.value)
-      .toBe('southeast');
-    expect(chooseEthnicityOption('What is your ethnicity?', ['What is your ethnicity?'], 'SE Asian', options, 'medium').applicable)
-      .toBe(false);
+  it('generalizes a free-text answer to the only broader matching option', () => {
+    const options = [{ label: 'Asian', value: 'asian' }, { label: 'White', value: 'white' }];
+    expect(chooseGeneralizedOption('SE Asian', options)?.value).toBe('asian');
   });
 
-  it('does not guess another ethnicity when the matching category is absent', () => {
-    const options = [{ label: 'East Asian' }, { label: 'South Asian' }, { label: 'Asian' }];
-    const result = chooseEthnicityOption('Race and ethnicity', ['What is your ethnicity?'], 'SE Asian', options, 'high');
-    expect(result).toEqual({ applicable: true, option: undefined });
+  it('prefers the most specific option that fits the saved answer', () => {
+    const options = [{ label: 'Asian' }, { label: 'Southeast Asian' }];
+    expect(chooseGeneralizedOption('Southeast Asian', options)?.label).toBe('Southeast Asian');
+  });
+
+  it('does not generalize when multiple offered choices fit equally', () => {
+    expect(chooseGeneralizedOption('Asian', [{ label: 'Asian' }, { label: 'Asian' }])).toBeUndefined();
+  });
+
+  it('does not generalize an answer to unrelated options', () => {
+    expect(chooseGeneralizedOption('SE Asian', [{ label: 'East Asian' }, { label: 'South Asian' }])).toBeUndefined();
+  });
+
+  it('uses generalization only for a very high-confidence, unambiguous question match', () => {
+    const options = [{ label: 'Asian' }, { label: 'White' }];
+    expect(chooseSavedAnswerOption('SE Asian', options, 0.86, 0.2)?.label).toBe('Asian');
+    expect(chooseSavedAnswerOption('SE Asian', options, 0.84, 0.2)).toBeUndefined();
+    expect(chooseSavedAnswerOption('SE Asian', options, 0.9, 0.85)).toBeUndefined();
   });
 });

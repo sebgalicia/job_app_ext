@@ -1,4 +1,5 @@
 import { defaultThresholds, matchQuestion, scoreSimilarity, type MatchCandidate } from '../matching/matcher';
+import { normalizeText } from '../matching/normalize';
 import { chooseFactOption, detectPolarity, type ChoiceOption } from '../matching/polarity';
 import type { DetectedField } from '../adapters/field';
 
@@ -187,32 +188,30 @@ export function chooseTextOption<T extends ChoiceOption>(answer: string, options
   return scored[0].option;
 }
 
-export function ethnicityAliasKey(text: string): 'southeast-asian' | undefined {
-  const normalized = text.toLocaleLowerCase('en-US').replace(/[^a-z]+/g, ' ').trim();
-  return /\b(?:se|south east|south eastern|southeast|southeastern) asian\b/.test(normalized)
-    ? 'southeast-asian'
-    : undefined;
+export function chooseGeneralizedOption<T extends ChoiceOption>(answer: string, options: T[]): T | undefined {
+  const answerTokens = new Set(normalizeText(answer));
+  if (answerTokens.size === 0) return undefined;
+  const broaderOptions = options.map((option) => {
+    const labelTokens = normalizeText(option.label);
+    const valueTokens = normalizeText(option.value ?? '');
+    const labelFits = labelTokens.length > 0 && labelTokens.every((token) => answerTokens.has(token));
+    const valueFits = valueTokens.length > 0 && valueTokens.every((token) => answerTokens.has(token));
+    return { option, specificity: Math.max(labelFits ? labelTokens.length : 0, valueFits ? valueTokens.length : 0) };
+  }).filter((candidate) => candidate.specificity > 0).sort((a, b) => b.specificity - a.specificity);
+  if (!broaderOptions[0] || broaderOptions[1]?.specificity === broaderOptions[0].specificity) return undefined;
+  return broaderOptions[0].option;
 }
 
-export function chooseEthnicityOption<T extends ChoiceOption>(
-  question: string,
-  savedQuestionWordings: string[],
+export function chooseSavedAnswerOption<T extends ChoiceOption>(
   answer: string,
   options: T[],
-  confidence: 'high' | 'medium' | 'none',
-): { applicable: boolean; option?: T } {
-  const isEthnicity = /\b(?:ethnic(?:ity)?|race)\b/i.test(`${question} ${savedQuestionWordings.join(' ')}`);
-  const alias = ethnicityAliasKey(answer);
-  if (confidence !== 'high' || !isEthnicity || !alias) return { applicable: false };
-  const matches = options.filter((option) => ethnicityAliasKey(option.label) === alias
-    || ethnicityAliasKey(option.value ?? '') === alias);
-  if (matches.length === 1) return { applicable: true, option: matches[0] };
-  if (matches.length > 1) return { applicable: true, option: undefined };
-
-  // A broad “Asian” option is a fallback only when no Southeast Asian variant is offered.
-  const broadAsianOptions = options.filter((option) =>
-    /^(?:asian)$/i.test(option.label.trim()) || /^(?:asian)$/i.test((option.value ?? '').trim()));
-  return { applicable: true, option: broadAsianOptions.length === 1 ? broadAsianOptions[0] : undefined };
+  questionScore: number,
+  runnerUpScore: number,
+): T | undefined {
+  const directOption = chooseTextOption(answer, options);
+  if (directOption) return directOption;
+  const veryHighQuestionConfidence = questionScore >= 0.85 && questionScore - runnerUpScore >= 0.08;
+  return veryHighQuestionConfidence ? chooseGeneralizedOption(answer, options) : undefined;
 }
 
 function focusedChoices(target: HTMLInputElement | HTMLSelectElement): SelectChoice[] {
@@ -254,7 +253,7 @@ function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Arr
   }
   const match = matchQuestion(question, candidates, defaultThresholds);
   return match.bestKey && match.confidence !== 'none'
-    ? { entry: entries.get(match.bestKey), confidence: match.confidence }
+    ? { entry: entries.get(match.bestKey), confidence: match.confidence, score: match.bestScore, runnerUpScore: match.secondScore }
     : undefined;
 }
 
@@ -292,8 +291,12 @@ function getStoredChoice(
   }
 
   if (typeof entry?.answer !== 'string') return undefined;
-  const ethnicityMatch = chooseEthnicityOption(question, entry.questions, entry.answer, options, storedMatch?.confidence ?? 'none');
-  const selectedOption = ethnicityMatch.applicable ? ethnicityMatch.option : chooseTextOption(entry.answer, options);
+  const selectedOption = chooseSavedAnswerOption(
+    entry.answer,
+    options,
+    storedMatch?.score ?? 0,
+    storedMatch?.runnerUpScore ?? 0,
+  );
   if (!selectedOption) return undefined;
   return {
     option: selectedOption,
