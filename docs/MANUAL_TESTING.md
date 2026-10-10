@@ -1,6 +1,6 @@
 # Manual Firefox test checklist
 
-Use Firefox 140 or newer and a private test answers file. Avoid putting real personal information in fixture tests. Build and load the extension using the [README development setup](README.md#development-setup).
+Use Firefox 140 or newer and a private test answers file. Avoid putting real personal information in fixture tests. Build and load the extension using the [README setup instructions](../README.md#get-started).
 
 Start the local fixture server with `npm run serve:fixtures`, open a fixture page (for example, `http://127.0.0.1:4173/lever-form.html`), and grant access with the popup's **Enable on this page** action. Also try an actual supported job board if you have a test application available. A fixture is useful for repeatable checks, but does not prove compatibility with every site's production form.
 

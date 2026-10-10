@@ -81,7 +81,7 @@ function parseArguments(args: string[]): { answersPath: string; inputPath: strin
   const inputPath = values.get('--input');
   const outputPath = values.get('--out');
   if (!answersPath || !inputPath || !outputPath) {
-    throw new Error('Usage: npm run score -- --answers answers.json --input questions.csv --out results.csv');
+    throw new Error('Usage: npm run score -- --answers answers.json --input examples/questions.csv --out results.csv');
   }
   return { answersPath, inputPath, outputPath };
 }

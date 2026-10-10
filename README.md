@@ -1,70 +1,116 @@
 # Job Autofill
 
-A lightweight Firefox and Zen extension for previewing answers from a private, user supplied file while filling job applications. It keeps its data in the browser and does not send answer data to a server.
+A lightweight Firefox and Zen extension that helps you answer repeat questions on job applications using answers you save yourself. It keeps your answers in local browser storage and does not send them to a server.
 
-## Current status
+## Who it helps
 
-The extension can import and export an answers JSON file from its settings page, detect fields on supported job boards, and preview matching text and choice answers. Its optional **Fill matching fields as each step opens, then wait** setting fills visible, empty fields with Medium confidence or above when the page opens. On multi-step forms, it waits for you to press a Next or Continue button before checking the newly shown step. It does not submit the form or show focus previews while this mode is on. The setting is off by default; already-filled fields are left alone. The toolbar popup shows an editable company and role, a site on/off switch, and the number of matched fields in the current tab. You can opt in to tracking an application when saving its company and role; tracked entries remain in local browser storage and link back to the application page. Settings also let you tune the high and medium question-match thresholds. On other sites, use **Enable on this page** in the popup to grant temporary access for that tab.
+Job seekers who are tired of repeatedly entering the same profile details and answers across application forms. The extension can suggest saved answers as you focus fields, or optionally fill eligible fields as each application step opens so you can review them before continuing.
 
-## Development setup
+## What it does
 
-Install dependencies and build the extension (the build also compiles the JSON Schema into standalone validation code):
+- Finds questions on supported application sites and compares them with wording in your answers file.
+- Shows one field preview at a time, or optionally fills visible, empty fields when a step opens.
+- Leaves fields with existing answers alone and never submits an application.
+- Lets you save company and role details and optionally track applications locally.
+- Works with a rules-based matcher; it does not use an AI model or remote matching service.
+
+**Availability:** The extension is not yet published on AMO. To try it, build it from this repository and load the temporary add-on in Firefox. Firefox 140 or newer is required.
+
+## Get started
+
+1. Install Node.js, then open a terminal in the repository folder.
+2. Install dependencies and build the extension:
+
+   ```sh
+   npm install
+   npm run build
+   ```
+
+3. In Firefox, open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on...**, and select `dist/manifest.json`.
+4. Open the extension's Settings, import your answers file, and visit an application page.
+
+The temporary add-on stays installed until Firefox restarts. Build again after changing source code, HTML, CSS, or the answer schema.
+
+## Prepare your answers
+
+Start with [`template.json`](template.json). Save a private copy and fill in its `profile`, `facts`, and `answers` sections. The [`answers.schema.json`](answers.schema.json) file describes the format and enables editor hints in tools such as VS Code. Import your copy from Settings; invalid files are rejected with specific errors. You can export the saved copy from Settings as well.
+
+Keep personal answers private. Do not add your completed answers file to this repository.
+
+## Preview and automatic filling
+
+With automatic filling off, focus an empty field to see a suggestion. **Tab** accepts a normal suggestion. Medium-confidence and sensitive suggestions are highlighted and require **Enter**; **Tab** moves on without accepting them. Typing dismisses a text preview, and **Esc** dismisses it without filling. The extension does not overwrite a field that already has text or a real choice selected.
+
+The optional **Fill matching fields as each step opens, then wait** setting fills visible, empty fields with Medium confidence or above. It then waits for you to press Next or Continue before checking the newly opened step. Review the values before submitting; the extension never submits applications.
+
+On a site outside the supported list, use **Enable on this page** in the popup to grant temporary access for that tab. The popup also lets you edit detected company and role details and turn the extension off for a site.
+
+## Privacy
+
+Answers, preferences, thresholds, company and role context, and opt-in tracked applications are saved in `browser.storage.local` on your device. The extension does not transmit them. See [`docs/PRIVACY.md`](docs/PRIVACY.md).
+
+## Supported sites
+
+Built-in page access covers Workday, Greenhouse, Lever, Ashby, iCIMS, Taleo, and SmartRecruiters. A generic form adapter handles common field markup, and you can temporarily enable the extension on other sites from the popup. Employers customize their forms, so support for one company's form does not guarantee every form on that platform works.
+
+## Project files
+
+| Location | Purpose |
+| --- | --- |
+| `src/adapters/` | Generic and ATS-specific question label discovery |
+| `src/matching/` | Question similarity, normalization, and yes/no polarity rules |
+| `src/preview/` | Preview and acceptance behavior |
+| `src/popup/`, `src/settings/` | Extension popup and settings interface |
+| `fixtures/` | Local sample application forms for manual checks |
+| `examples/questions.csv` | Sanitized sample questions for the scoring CLI |
+| `tests/` | Automated unit and integration tests |
+| `scripts/` | Build, scoring CLI, and local fixture server |
+| `docs/` | Privacy, manual testing, roadmap, and archived project brief |
+| `template.json`, `answers.schema.json` | Starter answers file and its schema |
+
+## For contributors
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the adapter workflow, fixture guidance, and project rules. Before relying on browser behavior, follow the [Firefox manual checklist](docs/MANUAL_TESTING.md). The [roadmap](docs/NEXT_STEPS.md) lists remaining release work.
+
+### Try a local form
+
+Start the fixture server in a terminal:
 
 ```sh
-npm install
+npm run serve:fixtures
+```
+
+Open a sample URL such as `http://127.0.0.1:4173/workday-form.html`. Since localhost is not a built-in supported host, click the extension toolbar button and choose **Enable on this page**. These sanitized fixtures are repeatable examples; they do not prove compatibility with every production form.
+
+### Build, test, and lint
+
+```sh
 npm run build
+npm test
+npm run lint:extension
 ```
 
-The generated extension is in `dist/`. To run it with web-ext, use:
+The build compiles the JSON schema into standalone validation code. `dist/` is generated output and is not checked into source control.
+
+## How matching works
+
+This section is for readers who want the implementation details. Matching lowercases text, removes punctuation and common filler words, lightly normalizes word endings, and expands a small synonym list. It combines weighted word overlap, token-set overlap, and character-trigram similarity to tolerate some wording differences and typos. The score is a similarity score, not a probability.
+
+The High and Medium thresholds default to `0.72` and `0.50`. High matches get a normal preview, Medium matches get a highlighted preview, and weaker matches produce no preview. Medium must remain below High.
+
+For choices, the extension first looks for a direct match between the saved answer and an offered option. A broader option can be suggested for a free-text answer only when the question match reaches `0.85` and leads the next-best question match by at least `0.08`; if multiple options fit equally well, it leaves the field unanswered. Yes/no facts use topic and negation rules to account for reversed questions. Ambiguous wording is not guessed.
+
+### Inspect matching with the scoring CLI
+
+Run the same matcher and polarity logic used by the extension against a CSV:
 
 ```sh
-npx web-ext run --source-dir dist
+npm run score -- --answers answers.json --input examples/questions.csv --out results.csv
 ```
 
-You can also load it manually in Firefox: open `about:debugging#/runtime/this-firefox`, choose **Load Temporary Add-on...**, and select `dist/manifest.json`. The extension requires Firefox 140 or newer. Rebuild after changing static HTML, CSS, or the answer schema.
+The input needs a `question` column. An optional `options` column contains choices separated by `|`. `expected_key` and `expected_value` let you label expected answers and choices; those columns are copied to the results. The output includes the best and runner-up answer keys and scores, confidence, detected yes/no topic, polarity flips, and chosen option. Unlabeled rows should be excluded from accuracy calculations.
 
-To open the local test forms, start the fixture server in another terminal with `npm run serve:fixtures`, then visit a fixture such as `http://127.0.0.1:4173/icims-form.html`, `taleo-form.html`, or `smartrecruiters-form.html`. Since localhost is not a built-in supported host, click the extension toolbar button and choose **Enable on this page** to grant access for that tab. These static fixtures exercise adapter label handling; they do not prove compatibility with every production ATS form.
-
-## Answers file
-
-`template.json` is a starter file. Make a private copy and edit its `profile`, `facts`, and `answers` sections. `answers.schema.json` provides editor hints and validation for that format. Open the extension settings page to import the file; invalid files show errors and are not saved. Use **Export saved answers** to download the current local copy.
-
-## How answer matching works
-
-The current extension uses local, rule-based matching. It does not use an AI model or send form questions to a service. When you focus an empty supported field, it gathers the available question text (such as labels and accessible names) and compares it with the wording attached to your saved answers. It uses the best matching wording for each answer.
-
-Before comparing, matching lowercases the text, removes punctuation and common filler words, lightly normalizes word endings, and treats a small built-in set of terms as synonyms. For example, “job title” and “position” can be related. It then combines three similarity measures: weighted word overlap, shared unique words, and character patterns that can tolerate some typos. These are heuristics; unusual wording can still match incorrectly or fail to match.
-
-The **High confidence** and **Medium confidence** sliders control question-to-answer matching. Their defaults are `0.72` and `0.50`. Scores at or above High get a normal preview; scores from Medium up to High get a highlighted preview; lower scores produce no preview. Medium must stay below High. The score is a similarity score, not a probability that the answer is correct. The optional automatic filling setting uses the Medium threshold as its minimum and also fills High matches.
-
-For a choice field, the extension first tries to match the saved answer directly to one offered label or value. If that fails, it can generalize a free-text answer to a broader offered choice only when the question wording score is at least `0.85` and beats the next-best question match by at least `0.08`. For example, “SE Asian” can fit the offered option “Asian.” If equally specific choices fit, it leaves the choice unanswered. This stricter fallback is independent of the settings sliders.
-
-Yes/no facts such as sponsorship, work authorization, relocation, and age use topic and negation rules. The rules look for negation attached to the relevant topic, so “I do not need sponsorship” can map to the saved sponsorship fact. Ambiguous wording or options do not get guessed.
-
-## Preview and acceptance behavior
-
-- The extension only looks for an answer after a supported field gets focus, and previews one field at a time.
-- It never previews over a text field that already contains text or a choice field that already has a real selection. A blank or “Select…” dropdown option counts as empty.
-- A normal text preview appears as placeholder text. Press **Tab** to accept it; typing dismisses it, and **Esc** dismisses it without filling.
-- A choice preview outlines the suggested option. Press **Tab** to accept a normal suggestion.
-- Medium-confidence and sensitive suggestions (including sponsorship, work authorization, salary, demographic, and entries marked `sensitive`) are highlighted. Press **Enter** to accept a highlighted suggestion; **Tab** moves on without accepting it.
-- `{company}` and `{role}` are filled from the popup’s detected or edited values. If either value is missing, the preview marks it and blocks acceptance until the value is supplied.
-
-Review previews before accepting them. With automatic filling off, the extension previews one suggestion at a time. With it on, the extension fills eligible fields as each step opens and waits for you to press Next or Continue before checking another step; review all filled values before submitting. It never submits applications.
-
-## Evaluate question matching
-
-The scoring CLI first builds the extension (including its generated JSON validator), then runs the same question matcher and yes/no polarity rules used by the extension against a CSV of sample questions. It does not call an AI service. Run it with an answers file and an input CSV:
-
-```sh
-npm run score -- --answers answers.json --input questions.csv --out results.csv
-```
-
-`questions.csv` must have a `question` column. An optional `options` column contains choices separated by `|`. Optional `expected_key` values identify the expected answer entry (for example, `answers[3]`); `expected_value` can hold the expected selected option label. The CLI copies either expected column into `results.csv` unchanged. `questions.csv` in this repository includes tricky example wording for sponsorship, work authorization, relocation, and age questions.
-
-The results include the best and runner-up answer keys and scores, confidence, any detected yes/no topic and polarity flips, and the option the shared choice logic selected. Scores help inspect errors; they are similarity scores, not probabilities. Rows with an empty `expected_key` are unlabeled and should not be included in answer-key accuracy calculations.
-
-For example, use pandas to calculate labeled answer-key accuracy by detected topic:
+Use pandas to summarize labeled answer-key accuracy by topic:
 
 ```python
 import pandas as pd
@@ -75,32 +121,8 @@ labeled["correct"] = labeled["best_key"] == labeled["expected_key"]
 print(labeled.groupby("detected_topic")["correct"].agg(["mean", "count"]))
 ```
 
-To explore a stricter high-confidence cutoff, sweep the saved best scores and compare both accuracy and coverage. This analysis does not change the extension settings:
-
-```python
-for cutoff in [0.60, 0.65, 0.70, 0.72, 0.75, 0.80, 0.85]:
-    accepted = labeled[labeled["best_score"] >= cutoff]
-    accuracy = accepted["correct"].mean() if len(accepted) else float("nan")
-    coverage = len(accepted) / len(labeled) if len(labeled) else 0
-    print(f"{cutoff:.2f}: accuracy={accuracy:.3f}, coverage={coverage:.3f}")
-```
-
-When rows have expected option labels, compare `chosen_option` with `expected_value` separately to evaluate option selection.
-
-## Privacy
-
-Imported answers, site preferences, company and role context, matching thresholds, the automatic filling preference, and any opt-in tracked applications are saved in `browser.storage.local` on this device. The extension does not transmit this data. You can remove it by clearing the extension's local storage or removing the extension. No analytics or remote matching service is used.
-
-See [PRIVACY.md](PRIVACY.md) for the short privacy statement.
-
-## Manual browser checks
-
-Automated tests cover individual logic, but do not replace trying the extension in Firefox. Follow the [manual test checklist](MANUAL_TESTING.md) before relying on it for real applications.
+You can sweep score cutoffs to compare accuracy with coverage. This analysis does not change extension settings. Compare `chosen_option` with `expected_value` separately when evaluating choice selection.
 
 ## Publishing
 
-Build and package the generated `dist/` directory with `npx web-ext build --source-dir dist`. Submit the package through the [Firefox Add-ons Developer Hub](https://addons.mozilla.org/developers/) as an unlisted add-on first. Test the signed unlisted version, address review feedback, and then submit it for a listed release. Mozilla’s review and signing requirements may change, so follow the current instructions in the Developer Hub before submission.
-
-## Project status and next steps
-
-The current implementation and remaining roadmap are summarized in [NEXT_STEPS.md](NEXT_STEPS.md). See [CONTRIBUTING.md](CONTRIBUTING.md) for adapter, fixture, and wording-example guidance.
+Build the package with `npx web-ext build --source-dir dist`. Submit it through the [Firefox Add-ons Developer Hub](https://addons.mozilla.org/developers/) as an unlisted add-on first, test the signed version, address review feedback, and then submit for a listed release. Check the current Developer Hub guidance before submission.
