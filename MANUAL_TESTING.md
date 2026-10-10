@@ -51,6 +51,5 @@ Start the local fixture server with `npm run serve:fixtures`, open a fixture pag
 
 - [ ] A valid answers JSON file imports and exports; an invalid one is rejected with useful errors.
 - [ ] Matching thresholds persist after closing and reopening Settings, and Medium remains below High.
-- [ ] The Local AI matching control is disabled and does not affect matching.
 - [ ] The job tracker stays off unless opted into; saving with it enabled records the current application locally.
 - [ ] No answer or page data is transmitted; the extension works without a remote matching service.
