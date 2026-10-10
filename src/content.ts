@@ -1,6 +1,6 @@
 import { chooseAdapter } from './adapters';
 import { describeFocusedField } from './adapters/field';
-import { showTextPreview } from './preview/text-preview';
+import { showChoicePreview, showTextPreview } from './preview/text-preview';
 
 const supportedControls = 'input, textarea, select';
 
@@ -21,7 +21,8 @@ function handleFocus(event: FocusEvent): void {
   document.dispatchEvent(new CustomEvent('job-autofill:question-detected', {
     detail: { ...descriptor, field: event.target },
   }));
-  void showTextPreview(event.target, descriptor);
+  if (descriptor.fieldType === 'text') void showTextPreview(event.target, descriptor);
+  else void showChoicePreview(event.target, descriptor);
 }
 
 // Content scripts are present on matched hosts, but do no work until focus enters a form control.

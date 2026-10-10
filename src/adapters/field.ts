@@ -37,7 +37,9 @@ export function describeFocusedField(
     fieldType = 'choice';
     optionLabels = Array.from(field.options, optionLabel).filter(Boolean);
   } else if (field instanceof HTMLInputElement && ['radio', 'checkbox'].includes(field.type)) {
-    fieldType = members.length > 1 ? 'choice' : 'yesno';
+    const allYesNo = members.length === 2 && members.every((member) => member instanceof HTMLInputElement
+      && /^(?:yes|no|true|false)$/i.test(member.labels?.[0]?.textContent?.trim() || member.value));
+    fieldType = allYesNo || members.length === 1 ? 'yesno' : 'choice';
     optionLabels = members.filter((member): member is HTMLInputElement => member instanceof HTMLInputElement).map((input) => {
       const label = input.labels?.[0];
       return label?.textContent?.replace(/\s+/g, ' ').trim() || input.value;
