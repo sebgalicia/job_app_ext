@@ -13,6 +13,19 @@ export type MatchResult = {
 export type Thresholds = { high: number; medium: number };
 export const defaultThresholds: Thresholds = { high: 0.72, medium: 0.5 };
 
+export function validThresholds(value: unknown): Thresholds {
+  if (!value || typeof value !== 'object') return defaultThresholds;
+  const candidate = value as Partial<Thresholds>;
+  if (typeof candidate.high !== 'number' || typeof candidate.medium !== 'number'
+    || !Number.isFinite(candidate.high) || !Number.isFinite(candidate.medium)
+    || candidate.high < 0.51 || candidate.high > 0.95
+    || candidate.medium < 0.3 || candidate.medium > 0.94
+    || candidate.medium >= candidate.high) {
+    return defaultThresholds;
+  }
+  return { high: candidate.high, medium: candidate.medium };
+}
+
 function cosine(left: string[], right: string[], idf: Map<string, number>): number {
   const leftCounts = new Map<string, number>();
   const rightCounts = new Map<string, number>();

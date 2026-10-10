@@ -1,6 +1,8 @@
+import { defaultThresholds, validThresholds, type Thresholds } from '../matching/matcher';
 import { validateAnswers } from '../validation';
 
 const storageKey = 'answers';
+const thresholdsKey = 'matchingThresholds';
 type BrowserStorage = {
   storage: {
     local: {
@@ -17,6 +19,11 @@ const exportButton = document.querySelector<HTMLButtonElement>('#export-button')
 const importStatus = document.querySelector<HTMLDivElement>('#import-status')!;
 const errorsList = document.querySelector<HTMLUListElement>('#validation-errors')!;
 const savedState = document.querySelector<HTMLParagraphElement>('#saved-state')!;
+const highThreshold = document.querySelector<HTMLInputElement>('#high-threshold')!;
+const mediumThreshold = document.querySelector<HTMLInputElement>('#medium-threshold')!;
+const highThresholdValue = document.querySelector<HTMLOutputElement>('#high-threshold-value')!;
+const mediumThresholdValue = document.querySelector<HTMLOutputElement>('#medium-threshold-value')!;
+const matchingStatus = document.querySelector<HTMLParagraphElement>('#matching-status')!;
 
 function showStatus(message: string, isError = false): void {
   importStatus.textContent = message;
@@ -31,6 +38,33 @@ function showErrors(errors: string[]): void {
   }));
 }
 
+function renderThresholds(thresholds: Thresholds): void {
+  highThreshold.value = String(thresholds.high);
+  mediumThreshold.value = String(thresholds.medium);
+  highThresholdValue.value = thresholds.high.toFixed(2);
+  mediumThresholdValue.value = thresholds.medium.toFixed(2);
+}
+
+async function saveThresholds(changed: 'high' | 'medium'): Promise<void> {
+  let high = Number(highThreshold.value);
+  let medium = Number(mediumThreshold.value);
+  if (changed === 'high' && high <= medium) medium = Math.max(0.3, high - 0.01);
+  if (changed === 'medium' && medium >= high) high = Math.min(0.95, medium + 0.01);
+  const thresholds = validThresholds({ high, medium });
+  renderThresholds(thresholds);
+  try {
+    await browserApi.storage.local.set({ [thresholdsKey]: thresholds });
+    matchingStatus.textContent = 'Matching thresholds saved on this device.';
+    matchingStatus.className = 'success';
+  } catch {
+    matchingStatus.textContent = 'Could not save matching thresholds.';
+    matchingStatus.className = 'error';
+  }
+}
+
+highThreshold.addEventListener('change', () => void saveThresholds('high'));
+mediumThreshold.addEventListener('change', () => void saveThresholds('medium'));
+
 async function refreshSavedState(): Promise<void> {
   try {
     const stored = await browserApi.storage.local.get(storageKey);
@@ -40,6 +74,17 @@ async function refreshSavedState(): Promise<void> {
   } catch {
     savedState.textContent = 'Could not read local storage. Check the extension permissions.';
     exportButton.disabled = true;
+  }
+}
+
+async function loadThresholds(): Promise<void> {
+  try {
+    const stored = await browserApi.storage.local.get(thresholdsKey);
+    renderThresholds(validThresholds(stored[thresholdsKey] ?? defaultThresholds));
+  } catch {
+    renderThresholds(defaultThresholds);
+    matchingStatus.textContent = 'Could not read saved thresholds; using defaults.';
+    matchingStatus.className = 'error';
   }
 }
 
@@ -100,3 +145,4 @@ exportButton.addEventListener('click', async () => {
 });
 
 void refreshSavedState();
+void loadThresholds();

@@ -1,4 +1,4 @@
-import { defaultThresholds, matchQuestion, scoreSimilarity, type MatchCandidate } from '../matching/matcher';
+import { defaultThresholds, matchQuestion, scoreSimilarity, validThresholds, type MatchCandidate, type Thresholds } from '../matching/matcher';
 import { normalizeText } from '../matching/normalize';
 import { chooseFactOption, detectPolarity, type ChoiceOption } from '../matching/polarity';
 import type { DetectedField } from '../adapters/field';
@@ -242,7 +242,7 @@ function hasRealChoice(target: HTMLInputElement | HTMLSelectElement): boolean {
   return controls.some((input) => input.checked);
 }
 
-function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Array<'choice' | 'yesno'>) {
+function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Array<'choice' | 'yesno'>, thresholds: Thresholds) {
   const candidates: MatchCandidate[] = [];
   const entries = new Map<string, NonNullable<StoredAnswers['answers']>[number]>();
   for (const [index, entry] of (answers.answers ?? []).entries()) {
@@ -251,7 +251,7 @@ function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Arr
     candidates.push({ key, questions: entry.questions });
     entries.set(key, entry);
   }
-  const match = matchQuestion(question, candidates, defaultThresholds);
+  const match = matchQuestion(question, candidates, thresholds);
   return match.bestKey && match.confidence !== 'none'
     ? { entry: entries.get(match.bestKey), confidence: match.confidence, score: match.bestScore, runnerUpScore: match.secondScore }
     : undefined;
@@ -268,9 +268,10 @@ function getStoredChoice(
   question: string,
   options: SelectChoice[],
   answers: StoredAnswers,
+  thresholds: Thresholds,
 ): { option: SelectChoice; confidence: 'high' | 'medium'; sensitive: boolean } | undefined {
   if (options.length === 0) return undefined;
-  const storedMatch = matchStoredEntry(question, answers, ['choice', 'yesno']);
+  const storedMatch = matchStoredEntry(question, answers, ['choice', 'yesno'], thresholds);
   const fact = factFor(question, answers);
   const entry = storedMatch?.entry;
   const booleanAnswer = entry?.type === 'yesno' && typeof entry.answer === 'boolean'
@@ -395,12 +396,13 @@ export async function showChoicePreview(
 
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    const stored = await browserApi.storage.local.get('answers');
+    const stored = await browserApi.storage.local.get(['answers', 'matchingThresholds']);
     if (document.activeElement !== target) return;
     const answers = stored.answers as StoredAnswers | undefined;
     if (!answers) return;
+    const thresholds = validThresholds(stored.matchingThresholds);
     const options = focusedChoices(target);
-    const choice = getStoredChoice(descriptor.question, options, answers);
+    const choice = getStoredChoice(descriptor.question, options, answers, thresholds);
     if (!choice) return;
     const highlighted = choice.confidence === 'medium' || choice.sensitive;
     installChoicePreview(target, choice.option, highlighted);
@@ -488,10 +490,11 @@ export async function showTextPreview(
 
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    const stored = await browserApi.storage.local.get(['answers', 'jobContextOverrides', 'detectedPageContexts']);
+    const stored = await browserApi.storage.local.get(['answers', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
     if (document.activeElement !== target) return;
     const answers = stored.answers as StoredAnswers | undefined;
     if (!answers) return;
+    const thresholds = validThresholds(stored.matchingThresholds);
 
     const { candidates, answerByKey, sensitiveByKey } = makeCandidates(answers);
     const hint = profileTypeHint(descriptor);
@@ -500,7 +503,7 @@ export async function showTextPreview(
       ...candidate,
       questions: candidate.key === hintedKey ? [...candidate.questions, descriptor.question] : candidate.questions,
     }));
-    const match = matchQuestion(descriptor.question, candidatesWithHints, defaultThresholds);
+    const match = matchQuestion(descriptor.question, candidatesWithHints, thresholds);
     if (!match.bestKey || match.confidence === 'none') return;
     const answer = answerByKey.get(match.bestKey);
     if (answer === undefined) return;

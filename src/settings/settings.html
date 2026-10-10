@@ -23,6 +23,16 @@
         <div id="import-status" role="status" aria-live="polite"></div>
         <ul id="validation-errors" class="errors" aria-label="Validation errors"></ul>
       </section>
+
+      <section aria-labelledby="matching-heading">
+        <h2 id="matching-heading">Matching confidence</h2>
+        <p>Adjust when answer previews appear. Higher values require a closer question match.</p>
+        <label for="high-threshold">High confidence: <output id="high-threshold-value">0.72</output></label>
+        <input id="high-threshold" type="range" min="0.51" max="0.95" step="0.01" value="0.72">
+        <label for="medium-threshold">Medium confidence: <output id="medium-threshold-value">0.50</output></label>
+        <input id="medium-threshold" type="range" min="0.30" max="0.94" step="0.01" value="0.50">
+        <p id="matching-status" role="status" aria-live="polite"></p>
+      </section>
     </main>
     <script src="settings.js"></script>
   </body>

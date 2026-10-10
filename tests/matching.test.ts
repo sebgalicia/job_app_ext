@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchQuestion, scoreSimilarity } from '../src/matching/matcher';
+import { defaultThresholds, matchQuestion, scoreSimilarity, validThresholds } from '../src/matching/matcher';
 import { normalizeText } from '../src/matching/normalize';
 import { chooseFactOption, detectPolarity } from '../src/matching/polarity';
 
@@ -43,6 +43,12 @@ describe('question similarity', () => {
     const candidates = [{ key: 'a', questions: ['Describe your favorite kind of work'] }];
     const result = matchQuestion('Describe your favorite kind of work', candidates, { high: 1.1, medium: 0.3 });
     expect(result.confidence).toBe('medium');
+  });
+
+  it('loads only valid matching thresholds and otherwise keeps the defaults', () => {
+    expect(validThresholds({ high: 0.9, medium: 0.4 })).toEqual({ high: 0.9, medium: 0.4 });
+    expect(validThresholds({ high: 0.3, medium: 0.4 })).toEqual(defaultThresholds);
+    expect(validThresholds({ high: 2, medium: 0.4 })).toEqual(defaultThresholds);
   });
 });
 
