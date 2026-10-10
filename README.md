@@ -4,11 +4,11 @@ A lightweight Firefox and Zen extension for previewing answers from a private, u
 
 ## Current status
 
-The project foundation is in place: a Firefox extension manifest, TypeScript/esbuild build pipeline, starter popup and settings pages, and an example answers file with its JSON Schema. Form detection, answer import, matching, and previews are not implemented yet.
+The project foundation and answer validation are in place: a Firefox extension manifest, TypeScript/esbuild build pipeline, starter popup and settings pages, an example answers file, its JSON Schema, and build-time generated Ajv validation. Form detection, answer import, matching, and previews are not implemented yet.
 
 ## Development setup
 
-Install dependencies and build the extension:
+Install dependencies and build the extension (the build also compiles the JSON Schema into standalone validation code):
 
 ```sh
 npm install

@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "job-autofill",
   "version": "0.1.0",
   "private": true,
@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "watch": "node scripts/build.mjs --watch",
-    "test": "vitest run",
+    "test": "npm run build && vitest run",
     "score": "tsx scripts/score.ts",
     "lint:extension": "web-ext lint --source-dir dist --ignore-files '**/*.map'",
     "lint": "npm run build && npm run lint:extension"

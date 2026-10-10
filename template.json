@@ -1,4 +1,4 @@
-﻿{
+{
   "_instructions": "Copy this file, replace examples with your own answers, then import the JSON in extension settings. Keep personal data on your device.",
   "profile": {
     "firstName": "Jordan", "lastName": "Example", "email": "jordan@example.com", "phone": "555-0100",
