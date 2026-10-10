@@ -34,6 +34,16 @@
         <p id="matching-status" role="status" aria-live="polite"></p>
       </section>
 
+      <section aria-labelledby="autofill-heading">
+        <h2 id="autofill-heading">Automatic filling</h2>
+        <label class="switch-row" for="autofill-on-open">
+          <input id="autofill-on-open" type="checkbox">
+          <span>Fill matching fields once when a page opens, then stop</span>
+        </label>
+        <p>When enabled, the extension makes one pass over visible, empty fields and fills answers with a Medium or High question match. After the pass, it stops responding on that page, including focus previews, until you reopen or reload the page. It does not submit the application. Review the filled fields before submitting.</p>
+        <p id="autofill-status" role="status" aria-live="polite"></p>
+      </section>
+
       <section aria-labelledby="local-ai-heading">
         <h2 id="local-ai-heading">Local AI matching</h2>
         <label class="switch-row" for="local-ai-matching">

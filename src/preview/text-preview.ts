@@ -169,6 +169,76 @@ function nativeSetValue(field: PreviewField, value: string): void {
   field.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
+function setChoiceValue(target: HTMLElement, choice: SelectChoice): boolean {
+  if (target.getAttribute('role') === 'combobox') {
+    if (target.getAttribute('aria-expanded') !== 'true' || !choice.element.isConnected) return false;
+    choice.element.click();
+    dispatchNativeChoiceChange(target);
+    return true;
+  }
+  if (target instanceof HTMLSelectElement) {
+    if (choice.element instanceof HTMLOptionElement && choice.element.disabled) return false;
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+    setter?.call(target, choice.value ?? (choice.element instanceof HTMLOptionElement ? choice.element.value : ''));
+    dispatchNativeChoiceChange(target);
+    return true;
+  }
+  if (target instanceof HTMLInputElement && ['radio', 'checkbox'].includes(target.type)) {
+    const chosen = choice.element as unknown as HTMLInputElement;
+    if (chosen.disabled || !chosen.isConnected) return false;
+    chosen.checked = true;
+    dispatchNativeChoiceChange(chosen);
+    return true;
+  }
+  return false;
+}
+
+/** Fill one blank, supported control when its answer match is at least Medium confidence. */
+export async function autofillControl(target: HTMLElement, descriptor: DetectedField): Promise<boolean> {
+  if (!target.isConnected || target.matches(':disabled, [readonly]') || target.closest('[hidden], [aria-hidden="true"]')) return false;
+  try {
+    const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
+    const isText = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+    if (isText) {
+      if (target.value.trim().length > 0 || (target instanceof HTMLInputElement && !previewableInputTypes.has(target.type))) return false;
+      const stored = await browserApi.storage.local.get(['answers', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
+      if (!target.isConnected || target.value.length > 0) return false;
+      const answers = stored.answers as StoredAnswers | undefined;
+      if (!answers) return false;
+      const thresholds = validThresholds(stored.matchingThresholds);
+      const { candidates, answerByKey } = makeCandidates(answers);
+      const hint = profileTypeHint(descriptor);
+      const hintedKey = hint ? `profile.${hint}` : undefined;
+      const candidatesWithHints = candidates.map((candidate) => ({
+        ...candidate,
+        questions: candidate.key === hintedKey ? [...candidate.questions, descriptor.question] : candidate.questions,
+      }));
+      const match = matchQuestion(descriptor.question, candidatesWithHints, thresholds);
+      if (!match.bestKey || match.confidence === 'none') return false;
+      const answer = answerByKey.get(match.bestKey);
+      if (answer === undefined) return false;
+      const resolved = resolvePlaceholders(answer, await previewContext(stored));
+      if (resolved.missing.length > 0 || !resolved.text.trim() || !target.isConnected || target.value.length > 0) return false;
+      nativeSetValue(target, resolved.text);
+      reportMatchedField(target);
+      return true;
+    }
+
+    if (hasRealChoice(target)) return false;
+    const stored = await browserApi.storage.local.get(['answers', 'matchingThresholds']);
+    if (!target.isConnected || hasRealChoice(target)) return false;
+    const answers = stored.answers as StoredAnswers | undefined;
+    if (!answers) return false;
+    const choice = getStoredChoice(descriptor.question, focusedChoices(target), answers, validThresholds(stored.matchingThresholds));
+    if (!choice || !setChoiceValue(target, choice.option)) return false;
+    reportMatchedField(target);
+    return true;
+  } catch {
+    // A storage or page-control failure must not stop the rest of the one-time sweep.
+    return false;
+  }
+}
+
 function clearActivePreview(): void {
   activePreview?.cleanup();
   activePreview = undefined;

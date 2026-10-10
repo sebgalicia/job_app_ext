@@ -4,7 +4,7 @@ A lightweight Firefox and Zen extension for previewing answers from a private, u
 
 ## Current status
 
-The extension can import and export an answers JSON file from its settings page, detect focused fields on supported job boards, and preview matching text and native choice answers. The toolbar popup shows an editable company and role, a site on/off switch, and the number of matched fields in the current tab. You can opt in to tracking an application when saving its company and role; tracked entries remain in local browser storage and link back to the application page. Settings also let you tune the high and medium question-match thresholds. On other sites, use **Enable on this page** in the popup to grant temporary access for that tab.
+The extension can import and export an answers JSON file from its settings page, detect fields on supported job boards, and preview matching text and choice answers. Its optional **Fill matching fields once when a page opens, then stop** setting makes one pass over visible, empty fields and fills matches at Medium confidence or above. After the pass, the extension stops responding on that page, including focus previews, until the page is reopened or reloaded. It does not submit the form. The setting is off by default; already-filled fields are left alone. The toolbar popup shows an editable company and role, a site on/off switch, and the number of matched fields in the current tab. You can opt in to tracking an application when saving its company and role; tracked entries remain in local browser storage and link back to the application page. Settings also let you tune the high and medium question-match thresholds. On other sites, use **Enable on this page** in the popup to grant temporary access for that tab.
 
 ## Development setup
 
@@ -37,7 +37,7 @@ The Local AI matching control in Settings is a disabled placeholder only. It doe
 
 Before comparing, matching lowercases the text, removes punctuation and common filler words, lightly normalizes word endings, and treats a small built-in set of terms as synonyms. For example, “job title” and “position” can be related. It then combines three similarity measures: weighted word overlap, shared unique words, and character patterns that can tolerate some typos. These are heuristics; unusual wording can still match incorrectly or fail to match.
 
-The **High confidence** and **Medium confidence** sliders control question-to-answer matching. Their defaults are `0.72` and `0.50`. Scores at or above High get a normal preview; scores from Medium up to High get a highlighted preview; lower scores produce no preview. Medium must stay below High. The score is a similarity score, not a probability that the answer is correct.
+The **High confidence** and **Medium confidence** sliders control question-to-answer matching. Their defaults are `0.72` and `0.50`. Scores at or above High get a normal preview; scores from Medium up to High get a highlighted preview; lower scores produce no preview. Medium must stay below High. The score is a similarity score, not a probability that the answer is correct. The optional automatic filling setting uses the Medium threshold as its minimum and also fills High matches.
 
 For a choice field, the extension first tries to match the saved answer directly to one offered label or value. If that fails, it can generalize a free-text answer to a broader offered choice only when the question wording score is at least `0.85` and beats the next-best question match by at least `0.08`. For example, “SE Asian” can fit the offered option “Asian.” If equally specific choices fit, it leaves the choice unanswered. This stricter fallback is independent of the settings sliders.
 
@@ -52,7 +52,7 @@ Yes/no facts such as sponsorship, work authorization, relocation, and age use to
 - Medium-confidence and sensitive suggestions (including sponsorship, work authorization, salary, demographic, and entries marked `sensitive`) are highlighted. Press **Enter** to accept a highlighted suggestion; **Tab** moves on without accepting it.
 - `{company}` and `{role}` are filled from the popup’s detected or edited values. If either value is missing, the preview marks it and blocks acceptance until the value is supplied.
 
-Review previews before accepting them. The extension previews one suggestion at a time; it does not submit applications or fill the whole page automatically.
+Review previews before accepting them. With automatic filling off, the extension previews one suggestion at a time. With it on, the extension fills eligible fields once when the page opens and then stops responding on that page; review all filled values before submitting. It never submits applications.
 
 ## Evaluate question matching
 
@@ -91,7 +91,7 @@ When rows have expected option labels, compare `chosen_option` with `expected_va
 
 ## Privacy
 
-Imported answers, site preferences, company and role context, matching thresholds, and any opt-in tracked applications are saved in `browser.storage.local` on this device. The extension does not transmit this data. You can remove it by clearing the extension’s local storage or removing the extension. No analytics or remote matching service is used.
+Imported answers, site preferences, company and role context, matching thresholds, the automatic filling preference, and any opt-in tracked applications are saved in `browser.storage.local` on this device. The extension does not transmit this data. You can remove it by clearing the extension’s local storage or removing the extension. No analytics or remote matching service is used.
 
 See [PRIVACY.md](PRIVACY.md) for the short privacy statement.
 

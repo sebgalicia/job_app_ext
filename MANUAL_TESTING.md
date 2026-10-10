@@ -14,6 +14,14 @@ Start the local fixture server with `npm run serve:fixtures`, open a fixture pag
 - [ ] A medium-confidence preview is highlighted and is not accepted by Tab; Enter accepts it.
 - [ ] A field that already contains text is never previewed or overwritten.
 
+## One-pass automatic filling
+
+- [ ] The setting is off by default and remains off after reinstall or with no saved preference.
+- [ ] When enabled, opening a supported application page fills visible, empty fields with Medium or High confidence matches once, then focus previews no longer appear on that page.
+- [ ] Existing text and selected choices are never overwritten; low-confidence or missing-context answers stay empty.
+- [ ] The pass does not submit the form, continue filling fields added afterward, or react to later focus events.
+- [ ] Disabling the setting prevents automatic filling on subsequently opened pages.
+
 ## Choices and sensitive answers
 
 - [ ] A blank or placeholder native select can show a suggested option.

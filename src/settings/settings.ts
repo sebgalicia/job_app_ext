@@ -3,6 +3,7 @@ import { validateAnswers } from '../validation';
 
 const storageKey = 'answers';
 const thresholdsKey = 'matchingThresholds';
+const autofillKey = 'autofillOnOpen';
 type BrowserStorage = {
   storage: {
     local: {
@@ -24,6 +25,8 @@ const mediumThreshold = document.querySelector<HTMLInputElement>('#medium-thresh
 const highThresholdValue = document.querySelector<HTMLOutputElement>('#high-threshold-value')!;
 const mediumThresholdValue = document.querySelector<HTMLOutputElement>('#medium-threshold-value')!;
 const matchingStatus = document.querySelector<HTMLParagraphElement>('#matching-status')!;
+const autofillOnOpen = document.querySelector<HTMLInputElement>('#autofill-on-open')!;
+const autofillStatus = document.querySelector<HTMLParagraphElement>('#autofill-status')!;
 
 function showStatus(message: string, isError = false): void {
   importStatus.textContent = message;
@@ -88,6 +91,31 @@ async function loadThresholds(): Promise<void> {
   }
 }
 
+autofillOnOpen.addEventListener('change', async () => {
+  try {
+    await browserApi.storage.local.set({ [autofillKey]: autofillOnOpen.checked });
+    autofillStatus.textContent = autofillOnOpen.checked
+      ? 'One-pass automatic filling is enabled on pages opened from now on.'
+      : 'One-pass automatic filling is disabled.';
+    autofillStatus.className = 'success';
+  } catch {
+    autofillStatus.textContent = 'Could not save the automatic filling setting.';
+    autofillStatus.className = 'error';
+    autofillOnOpen.checked = false;
+  }
+});
+
+async function loadAutofillSetting(): Promise<void> {
+  try {
+    const stored = await browserApi.storage.local.get(autofillKey);
+    autofillOnOpen.checked = stored[autofillKey] === true;
+  } catch {
+    autofillOnOpen.checked = false;
+    autofillStatus.textContent = 'Could not read the setting; automatic filling is off.';
+    autofillStatus.className = 'error';
+  }
+}
+
 importButton.addEventListener('click', async () => {
   showErrors([]);
   const file = fileInput.files?.[0];
@@ -146,3 +174,4 @@ exportButton.addEventListener('click', async () => {
 
 void refreshSavedState();
 void loadThresholds();
+void loadAutofillSetting();

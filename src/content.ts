@@ -1,6 +1,6 @@
 import { chooseAdapter } from './adapters';
 import { describeFocusedField } from './adapters/field';
-import { dismissActivePreview, saveDetectedPageContext, showChoicePreview, showTextPreview } from './preview/text-preview';
+import { autofillControl, dismissActivePreview, saveDetectedPageContext, showChoicePreview, showTextPreview } from './preview/text-preview';
 
 const supportedControls = 'input, textarea, select';
 
@@ -15,14 +15,20 @@ function isEligibleControl(target: EventTarget | null): target is HTMLElement {
 }
 
 const previewBrowser = (globalThis as typeof globalThis & { browser: {
-  storage: { local: { get(key: string): Promise<Record<string, unknown>> } };
+  storage: { local: { get(key: string | string[]): Promise<Record<string, unknown>> } };
   runtime: {
     onMessage: { addListener(listener: (message: { type?: string; enabled?: boolean }) => unknown): void };
     sendMessage(message: Record<string, unknown>): Promise<unknown>;
   };
 } }).browser;
 
+let pageAutomationStopped = false;
+const onePassAutofillEnabled = previewBrowser.storage.local.get('autofillOnOpen')
+  .then((stored) => stored.autofillOnOpen === true)
+  .catch(() => false);
+
 async function processFocusedControl(target: EventTarget | null): Promise<void> {
+  if (pageAutomationStopped || await onePassAutofillEnabled) return;
   if (!isEligibleControl(target)) return;
   try {
     const stored = await previewBrowser.storage.local.get('siteEnabled');
@@ -57,6 +63,37 @@ function refreshActiveCombobox(event: Event): void {
   if (target) requestAnimationFrame(() => void processFocusedControl(target));
 }
 
+async function autofillPageOnce(): Promise<void> {
+  if (!await onePassAutofillEnabled) return;
+  pageAutomationStopped = true;
+  try {
+    const stored = await previewBrowser.storage.local.get('siteEnabled');
+    const siteEnabled = stored.siteEnabled as Record<string, boolean> | undefined;
+    if (siteEnabled?.[location.hostname] === false) return;
+
+    const adapter = chooseAdapter(document);
+    const controls = Array.from(document.querySelectorAll<HTMLElement>(`${supportedControls}, [role="combobox"]`));
+    const seenGroups = new Set<string>();
+    for (const control of controls) {
+      if (!isEligibleControl(control) || !control.isConnected || control.matches(':disabled, [readonly]')
+        || control.closest('[hidden], [aria-hidden="true"]') || control.getClientRects().length === 0) continue;
+      if (control instanceof HTMLInputElement && ['radio', 'checkbox'].includes(control.type) && control.name) {
+        const groupKey = `${control.type}:${control.form?.id ?? 'document'}:${control.name}`;
+        if (seenGroups.has(groupKey)) continue;
+        seenGroups.add(groupKey);
+      }
+      const descriptor = describeFocusedField(control, adapter);
+      if (descriptor.question) await autofillControl(control, descriptor);
+    }
+  } catch {
+    // A failed automatic pass remains contained to this page and does not submit the form.
+  } finally {
+    document.removeEventListener('focusin', handleFocus);
+    document.removeEventListener('click', refreshActiveCombobox);
+    document.removeEventListener('keyup', refreshActiveCombobox);
+  }
+}
+
 const installationFlag = '__jobAutofillContentInstalled';
 const contentWorld = globalThis as typeof globalThis & Record<string, unknown>;
 if (!contentWorld[installationFlag]) {
@@ -66,6 +103,8 @@ if (!contentWorld[installationFlag]) {
   document.addEventListener('focusin', handleFocus);
   document.addEventListener('click', refreshActiveCombobox);
   document.addEventListener('keyup', refreshActiveCombobox);
+  // Run one bounded pass after the initial page has had a moment to render its form.
+  window.setTimeout(() => void autofillPageOnce(), 350);
 
   previewBrowser.runtime.onMessage.addListener((message) => {
     if (message.type === 'content-ping') return { ready: true };
