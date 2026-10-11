@@ -1,10 +1,12 @@
 import { defaultThresholds, matchQuestion, scoreSimilarity, validThresholds, type MatchCandidate, type Thresholds } from '../matching/matcher';
 import { normalizeText } from '../matching/normalize';
 import { chooseFactOption, detectPolarity, type ChoiceOption } from '../matching/polarity';
-import { ariaComboboxOptions, type DetectedField } from '../adapters/field';
+import { ariaComboboxOptions, choiceWidgetExpanded, isChoiceWidget, type DetectedField } from '../adapters/field';
 
 type StoredAnswers = {
   profile?: Record<string, string | number | undefined>;
+  profileAlternates?: Record<string, string[] | undefined>;
+  profileQuestions?: Record<string, string[] | undefined>;
   facts?: Record<string, string | number | boolean | undefined>;
   answers?: Array<{ questions: string[]; type: 'text' | 'choice' | 'yesno'; answer: string | boolean; sensitive?: boolean }>;
 };
@@ -22,21 +24,54 @@ type SelectChoice = ChoiceOption & { element: HTMLElement };
 
 const profileQuestions: Record<string, string[]> = {
   firstName: ['first name', 'given name', 'your first name'],
+  middleName: ['middle name', 'middle initial'],
   lastName: ['last name', 'family name', 'surname'],
+  preferredName: ['preferred name', 'name you go by', 'chosen name'],
   email: ['email address', 'email'],
   phone: ['phone number', 'telephone number', 'mobile number'],
+  phoneDeviceType: ['phone type', 'phone device type', 'phone category'],
+  pronouns: ['pronouns', 'preferred pronouns'],
   address: ['street address', 'address line one', 'mailing address'],
+  addressLine2: ['address line two', 'apartment', 'suite', 'unit number'],
   city: ['city', 'town'],
   state: ['state', 'province', 'region'],
   zip: ['zip code', 'postal code'],
   country: ['country', 'country of residence'],
-  linkedin: ['linkedin profile', 'linkedin url'],
-  github: ['github profile', 'github url'],
+  currentLocation: ['current location', 'current city', 'city and country'],
+  linkedin: ['linkedin profile', 'linkedin url', 'linkedin link', 'link to linkedin'],
+  github: ['github profile', 'github url', 'github link', 'link to github'],
   website: ['personal website', 'portfolio url', 'website'],
-  school: ['school', 'university', 'college'],
-  degree: ['degree'],
-  major: ['major', 'field of study'],
-  gradYear: ['graduation year', 'year of graduation'],
+  portfolio: ['portfolio', 'portfolio website', 'portfolio url'],
+  school: ['school', 'school name', 'name of school', 'university', 'college', 'educational institution', 'institution attended'],
+  schoolCity: ['school city', 'city of school', 'institution city'],
+  schoolCountry: ['school country', 'country of school', 'institution country'],
+  degree: ['degree', 'degree type', 'degree level', 'degree earned', 'credential earned'],
+  degreeReceived: ['degree received', 'degree completed', 'did you graduate', 'graduated'],
+  major: ['major', 'field of study', 'area of study', 'discipline'],
+  minor: ['minor', 'minor field of study'],
+  gpa: ['gpa', 'grade point average', 'grade average', 'cumulative average'],
+  gpaScale: ['gpa scale', 'grading scale', 'maximum gpa'],
+  schoolStartDate: ['school start date', 'education start date', 'first year attended', 'start date of attendance', 'school start month', 'school start year', 'education start month', 'education start year', 'attendance start month', 'attendance start year'],
+  schoolEndDate: ['school end date', 'education end date', 'last year attended', 'end date of attendance', 'school end month', 'school end year', 'education end month', 'education end year', 'attendance end month', 'attendance end year'],
+  schoolStartDateMonth: ['school start month', 'school start date month', 'education start month', 'attendance start month', 'start date month'],
+  schoolStartDateYear: ['school start year', 'school start date year', 'education start year', 'attendance start year', 'start date year', 'first year attended'],
+  schoolEndDateMonth: ['school end month', 'school end date month', 'education end month', 'attendance end month', 'end date month'],
+  schoolEndDateYear: ['school end year', 'school end date year', 'education end year', 'attendance end year', 'end date year', 'last year attended'],
+  gradYear: ['graduation year', 'year of graduation', 'degree year'],
+  currentCompany: ['current company', 'current employer', 'employer name', 'company name'],
+  currentTitle: ['current title', 'current role', 'job title', 'position title', 'occupation'],
+  yearsExperience: ['years of experience', 'years experience', 'total experience', 'relevant experience'],
+  employmentStartDate: ['employment start date', 'job start date', 'date started'],
+  employmentEndDate: ['employment end date', 'job end date', 'date ended'],
+  employmentDescription: ['job description', 'role description', 'responsibilities', 'work experience description'],
+  availableStartDate: ['available start date', 'earliest start date', 'when can you start', 'availability date'],
+  noticePeriod: ['notice period', 'required notice', 'length of notice'],
+  preferredWorkLocation: ['preferred work location', 'preferred office location', 'location preference'],
+  skills: ['skills', 'relevant skills', 'technical skills'],
+  certifications: ['certifications', 'professional certifications', 'licenses'],
+  languages: ['languages', 'language skills', 'languages spoken'],
+  references: ['references', 'professional references', 'reference contact'],
+  professionalSummary: ['professional summary', 'career summary', 'professional profile', 'about you'],
 };
 
 const autocompleteProfileKey: Record<string, string> = {
@@ -44,7 +79,7 @@ const autocompleteProfileKey: Record<string, string> = {
   'address-line1': 'address', 'address-level2': 'city', 'address-level1': 'state',
   'postal-code': 'zip', 'country-name': 'country',
 };
-const previewableInputTypes = new Set(['text', 'email', 'tel', 'url', 'search', 'number']);
+const previewableInputTypes = new Set(['text', 'email', 'tel', 'url', 'search', 'number', 'date']);
 
 let activePreview: { field: PreviewTarget; cleanup: () => void } | undefined;
 
@@ -63,18 +98,104 @@ export function resolvePlaceholders(
   return { text, missing: [...new Set(missing)] };
 }
 
+function cleanContextLabel(value: string | undefined): string | undefined {
+  const cleaned = value?.replace(/\s+/g, ' ').replace(/^[-|:\u2013\u2014\u00b7\s]+|[-|:\u2013\u2014\u00b7\s]+$/g, '')
+    .replace(/\s+(?:job application|application)$/i, '').trim();
+  if (!cleaned || cleaned.length > 140 || /^(careers?|jobs?|job application|application|apply(?:\s+now|\s+to\b.*)?|open positions|search jobs)$/i.test(cleaned)) return undefined;
+  return cleaned;
+}
+
+function jsonLdJobPostings(): Array<Record<string, unknown>> {
+  const postings: Array<Record<string, unknown>> = [];
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    const record = value as Record<string, unknown>;
+    const types = Array.isArray(record['@type']) ? record['@type'] : [record['@type']];
+    if (types.some((type) => typeof type === 'string' && type.toLocaleLowerCase() === 'jobposting')) postings.push(record);
+    if (record['@graph']) visit(record['@graph']);
+    if (record.itemListElement) visit(record.itemListElement);
+  };
+
+  for (const script of document.querySelectorAll<HTMLScriptElement>('script[type="application/ld+json"]')) {
+    try { visit(JSON.parse(script.textContent ?? '')); } catch { /* Ignore malformed site metadata. */ }
+  }
+  return postings;
+}
+
+function structuredCompanyName(value: unknown): string | undefined {
+  if (typeof value === 'string') return cleanContextLabel(value);
+  if (value && typeof value === 'object' && 'name' in value) {
+    const name = (value as { name?: unknown }).name;
+    return typeof name === 'string' ? cleanContextLabel(name) : undefined;
+  }
+  return undefined;
+}
+
+function pageCompanyFromUrl(): string | undefined {
+  const host = location.hostname.toLocaleLowerCase();
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return undefined;
+  let slug: string | undefined;
+  if (host.endsWith('.myworkdayjobs.com')) slug = host.split('.')[0];
+  else if (['boards.greenhouse.io', 'job-boards.greenhouse.io', 'jobs.lever.co', 'jobs.ashbyhq.com'].includes(host)) {
+    slug = location.pathname.split('/').filter(Boolean)[0];
+  } else if (host.endsWith('.smartrecruiters.com')) slug = location.pathname.split('/').filter(Boolean)[0];
+  if (slug && !/^(jobs?|careers?|apply|external|en-us)$/i.test(slug)) {
+    let decodedSlug = slug;
+    try { decodedSlug = decodeURIComponent(slug); } catch { /* Keep the literal URL segment. */ }
+    return cleanContextLabel(decodedSlug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (letter) => letter.toLocaleUpperCase()));
+  }
+
+  const ignoredDomains = /^(?:www|jobs?|careers?|apply|boards|job-boards|myworkdayjobs|myworkday|greenhouse|lever|ashbyhq|smartrecruiters|icims|taleo|workday|indeed|linkedin|ziprecruiter)$/i;
+  const labels = host.split('.').filter(Boolean);
+  let index = labels.length - 2;
+  if (/^(?:co|com|org|net|gov|edu)$/i.test(labels[index] ?? '') && index > 0) index -= 1;
+  const domainLabel = labels[index];
+  if (!domainLabel || ignoredDomains.test(domainLabel)) return undefined;
+  return cleanContextLabel(domainLabel.replace(/[-_]+/g, ' ').replace(/\b\w/g, (letter) => letter.toLocaleUpperCase()));
+}
+
 export function detectPageContext(): { company?: string; role?: string } {
-  const title = document.title;
-  const heading = document.querySelector('h1')?.textContent?.trim() ?? '';
-  const text = `${heading} ${title}`;
-  const atMatch = title.match(/^(.+?)\s+(?:at|@)\s+(.+?)(?:\s+\|.*)?$/i);
-  const companyMatch = text.match(/\b(?:jobs?|careers?)\s+(?:at|with)\s+([^|]+)/i);
-  const headingIsGeneric = /^(apply|application|careers?|job application)$/i.test(heading);
+  const postings = jsonLdJobPostings();
+  const posting = postings[0];
+  const postingOrg = posting?.hiringOrganization;
+  const structuredCompany = structuredCompanyName(postingOrg);
+  const structuredRole = typeof posting?.title === 'string' ? cleanContextLabel(posting.title) : undefined;
+  const headingSelector = 'h1, [itemprop="title"], [data-automation-id*="jobPostingHeader"], [data-testid*="job-title" i], [data-testid*="jobTitle" i]';
+  const heading = Array.from(document.querySelectorAll<HTMLElement>(headingSelector))
+    .map((element) => cleanContextLabel(element.textContent ?? undefined))
+    .find((candidate) => Boolean(candidate && !/^(careers?|jobs?|application|apply now)$/i.test(candidate)));
+  const title = cleanContextLabel(document.querySelector<HTMLMetaElement>('meta[property="og:title"]')?.content || document.title);
+  const atMatch = [title, heading].flatMap((candidate) => {
+    const match = candidate?.match(/^(.+?)\s+(?:at|@)\s+(.+?)(?:\s+(?:careers?|jobs?|application)\b.*)?$/i);
+    return match ? [match] : [];
+  })[0];
+  const titleParts = title?.split(/\s+[|\u2013\u2014\u00b7]\s+|\s+-\s+/).map(cleanContextLabel).filter((part): part is string => Boolean(part)) ?? [];
+  const genericCompanyNames = /^(?:workday|greenhouse|lever|ashby|ashbyhq|smartrecruiters|icims|taleo|indeed|linkedin|careers?)$/i;
+  const explicitCompany = Array.from(document.querySelectorAll<HTMLElement>(
+    '[itemprop="hiringOrganization"] [itemprop="name"], [itemprop="hiringOrganization"], [data-testid*="company-name" i], [class*="company-name" i]',
+  )).map((element) => cleanContextLabel(element.textContent ?? undefined))
+    .find((candidate) => candidate && !genericCompanyNames.test(candidate));
+  const siteName = cleanContextLabel(document.querySelector<HTMLMetaElement>('meta[property="og:site_name"]')?.content
+    ?? document.querySelector<HTMLMetaElement>('meta[name="application-name"]')?.content);
+  const headingIsGeneric = !heading || /^(apply|application|careers?|job application)$/i.test(heading);
   const titleRole = atMatch?.[1]?.trim();
-  const titleRoleIsGeneric = Boolean(titleRole && /^(careers?|jobs?|open positions|job openings)$/i.test(titleRole));
-  const role = (!titleRoleIsGeneric && titleRole) || (!headingIsGeneric && heading) || title.split('|')[0]?.trim();
-  const company = companyMatch?.[1]?.trim() || atMatch?.[2]?.trim();
-  return { company, role: role || undefined };
+  const companyAt = cleanContextLabel(atMatch?.[2]);
+  const companyFromTitle = titleParts.length > 1 ? titleParts.at(-1) : undefined;
+  const company = structuredCompany
+    || explicitCompany
+    || (siteName && !genericCompanyNames.test(siteName) ? siteName : undefined)
+    || companyAt
+    || (companyFromTitle && genericCompanyNames.test(companyFromTitle) ? undefined : companyFromTitle)
+    || pageCompanyFromUrl();
+  const role = structuredRole
+    || (!headingIsGeneric ? heading : undefined)
+    || cleanContextLabel(titleRole)
+    || titleParts.find((part) => !genericCompanyNames.test(part) && !/^(careers?|jobs?|application|apply now)$/i.test(part));
+  return { company, role };
 }
 
 const reportedMatches = new WeakSet<HTMLElement>();
@@ -108,7 +229,9 @@ export async function saveDetectedPageContext(): Promise<void> {
     const contexts = (stored.detectedPageContexts as Record<string, { company?: string; role?: string }> | undefined) ?? {};
     const key = pageContextKey();
     const previous = contexts[key] ?? {};
-    contexts[key] = { company: detected.company || previous.company, role: detected.role || previous.role };
+    const next = { company: detected.company || previous.company, role: detected.role || previous.role };
+    if (next.company === previous.company && next.role === previous.role) return;
+    contexts[key] = next;
     await browserApi.storage.local.set({ detectedPageContexts: contexts });
   } catch {
     // Page context is a convenience; a read/write failure must not affect form use.
@@ -127,24 +250,34 @@ async function previewContext(stored: Record<string, unknown>): Promise<{ compan
   };
 }
 
-function profileCandidates(profile: StoredAnswers['profile']): MatchCandidate[] {
+function profileCandidates(
+  profile: StoredAnswers['profile'],
+  customQuestions?: StoredAnswers['profileQuestions'],
+): MatchCandidate[] {
   return Object.entries(profile ?? {}).flatMap(([key, value]) => {
     if (typeof value !== 'string' && typeof value !== 'number') return [];
-    if (!String(value).trim() || !profileQuestions[key]) return [];
-    return [{ key: `profile.${key}`, questions: profileQuestions[key] }];
+    if (!String(value).trim()) return [];
+    const inferredKeyLabel = key
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+      .replace(/[_-]+/g, ' ')
+      .trim();
+    const labels = [...(profileQuestions[key] ?? []), ...(customQuestions?.[key] ?? [])];
+    if (labels.length === 0) labels.push(inferredKeyLabel);
+    return [{ key: `profile.${key}`, questions: labels }];
   });
 }
 
 function makeCandidates(answers: StoredAnswers): { candidates: MatchCandidate[]; answerByKey: Map<string, string>; sensitiveByKey: Set<string> } {
-  const candidates = profileCandidates(answers.profile);
+  const candidates = profileCandidates(answers.profile, answers.profileQuestions);
   const answerByKey = new Map<string, string>();
   const sensitiveByKey = new Set<string>();
   for (const [index, entry] of (answers.answers ?? []).entries()) {
-    if (entry.type !== 'text' || typeof entry.answer !== 'string') continue;
+    if (entry.type !== 'text' || typeof entry.answer !== 'string' || !entry.answer.trim()) continue;
     const key = `answers[${index}]`;
     candidates.push({ key, questions: entry.questions });
     answerByKey.set(key, entry.answer);
-    if (entry.sensitive || /sponsor|visa|authori[sz]|eligible|salary|compensation|demograph|race|gender|disability/i.test(entry.questions.join(' '))) {
+      if (entry.sensitive || /sponsor|visa|authori[sz]|eligible|salary|compensation|demograph|race|gender|disability/i.test(entry.questions.join(' '))) {
       sensitiveByKey.add(key);
     }
   }
@@ -162,6 +295,31 @@ function profileTypeHint(field: DetectedField): string | undefined {
     ?? (field.inputType === 'email' ? 'email' : field.inputType === 'tel' ? 'phone' : undefined);
 }
 
+function datePartForQuestion(key: string, value: string, question: string): string {
+  if (!['schoolStartDate', 'schoolEndDate', 'employmentStartDate', 'employmentEndDate', 'availableStartDate'].includes(key)) return value;
+  const asksMonth = /\bmonth\b/i.test(question);
+  const asksYear = /\byear\b/i.test(question);
+  if (!asksMonth && !asksYear) return value;
+
+  // Dates in answers use ISO format. Split them when an application asks for
+  // separate month and year dropdowns instead of one date field.
+  const iso = value.match(/^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/);
+  if (iso) {
+    if (asksYear) return iso[1];
+    const month = Number(iso[2]);
+    return Number.isInteger(month) && month >= 1 && month <= 12
+      ? new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2000, month - 1, 1)))
+      : value;
+  }
+  const year = value.match(/\b(?:19|20)\d{2}\b/);
+  if (asksYear && year) return year[0];
+  if (asksMonth) {
+    const month = value.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/i);
+    if (month) return month[0];
+  }
+  return value;
+}
+
 function nativeSetValue(field: PreviewField, value: string): void {
   const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), 'value')?.set;
   setter?.call(field, value);
@@ -170,8 +328,8 @@ function nativeSetValue(field: PreviewField, value: string): void {
 }
 
 function setChoiceValue(target: HTMLElement, choice: SelectChoice): boolean {
-  if (target.getAttribute('role') === 'combobox') {
-    if (target.getAttribute('aria-expanded') !== 'true' || !choice.element.isConnected) return false;
+  if (isChoiceWidget(target)) {
+    if (!choiceWidgetExpanded(target) || !choice.element.isConnected) return false;
     choice.element.click();
     dispatchNativeChoiceChange(target);
     return true;
@@ -198,7 +356,11 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
   if (!target.isConnected || target.matches(':disabled, [readonly]') || target.closest('[hidden], [aria-hidden="true"]')) return false;
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    const isText = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+    // A closed autocomplete has no selectable options yet; leave it alone in
+    // one-pass mode instead of inserting text that may not select an option.
+    if (isChoiceWidget(target) && !choiceWidgetExpanded(target)) return false;
+    const isText = !isChoiceWidget(target)
+      && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement);
     if (isText) {
       if (target.value.trim().length > 0 || (target instanceof HTMLInputElement && !previewableInputTypes.has(target.type))) return false;
       const stored = await browserApi.storage.local.get(['answers', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
@@ -272,20 +434,54 @@ export function chooseGeneralizedOption<T extends ChoiceOption>(answer: string, 
   return broaderOptions[0].option;
 }
 
+function chooseClosestGeneralizedOption<T extends ChoiceOption>(answer: string, options: T[]): T | undefined {
+  const scored = options.map((option) => ({
+    option,
+    score: Math.max(scoreSimilarity(answer, option.label), scoreSimilarity(answer, option.value ?? '')),
+  })).sort((left, right) => right.score - left.score);
+  const best = scored[0];
+  if (!best || best.score < defaultThresholds.medium) return undefined;
+  if (scored[1] && best.score - scored[1].score < 0.08) return undefined;
+  return best.option;
+}
+
 export function chooseSavedAnswerOption<T extends ChoiceOption>(
   answer: string,
   options: T[],
   questionScore: number,
   runnerUpScore: number,
+  alternates: string[] = [],
 ): T | undefined {
-  const directOption = chooseTextOption(answer, options);
-  if (directOption) return directOption;
+  const values = [...new Set([answer, ...alternates].map((value) => value.trim()).filter(Boolean))];
+  const directOptions = values.flatMap((value) => {
+    const option = chooseTextOption(value, options);
+    return option ? [option] : [];
+  });
+  const uniqueDirectOptions = [...new Map(directOptions.map((option) => [option.value ?? option.label, option])).values()];
+  if (uniqueDirectOptions.length === 1) return uniqueDirectOptions[0];
+  if (uniqueDirectOptions.length > 1) return undefined;
   const veryHighQuestionConfidence = questionScore >= 0.85 && questionScore - runnerUpScore >= 0.08;
-  return veryHighQuestionConfidence ? chooseGeneralizedOption(answer, options) : undefined;
+  if (!veryHighQuestionConfidence) return undefined;
+  const generalizedOptions = values.flatMap((value) => {
+    const option = chooseGeneralizedOption(value, options);
+    return option ? [option] : [];
+  });
+  const uniqueGeneralizedOptions = [...new Map(generalizedOptions.map((option) => [option.value ?? option.label, option])).values()];
+  if (uniqueGeneralizedOptions.length === 1) return uniqueGeneralizedOptions[0];
+  if (uniqueGeneralizedOptions.length > 1) return undefined;
+
+  // Fuzzy option matching is a generalized answer: only try it when the
+  // question itself passes the existing very-high-confidence and margin gate.
+  const closestOptions = values.flatMap((value) => {
+    const option = chooseClosestGeneralizedOption(value, options);
+    return option ? [option] : [];
+  });
+  const uniqueClosestOptions = [...new Map(closestOptions.map((option) => [option.value ?? option.label, option])).values()];
+  return uniqueClosestOptions.length === 1 ? uniqueClosestOptions[0] : undefined;
 }
 
 function focusedChoices(target: HTMLElement): SelectChoice[] {
-  if (target.getAttribute('role') === 'combobox') {
+  if (isChoiceWidget(target)) {
     return ariaComboboxOptions(target).map((option) => {
       const label = (option.getAttribute('aria-label') || option.textContent || '').replace(/\s+/g, ' ').trim();
       return { label, value: option.getAttribute('data-value') || option.getAttribute('value') || label, element: option };
@@ -308,9 +504,13 @@ function focusedChoices(target: HTMLElement): SelectChoice[] {
 }
 
 function hasRealChoice(target: HTMLElement): boolean {
-  if (target.getAttribute('role') === 'combobox') {
+  if (isChoiceWidget(target)) {
+    const explicitValue = (target.getAttribute('aria-valuetext') || target.getAttribute('data-value') || '').trim();
+    if (explicitValue && !isPlaceholderOption(explicitValue, 'has-value')) return true;
+    // While open, an input's text is a search query, not a committed choice.
+    if (choiceWidgetExpanded(target)) return false;
     if (target instanceof HTMLInputElement) return target.value.trim().length > 0;
-    const currentValue = (target.getAttribute('aria-valuetext') || target.getAttribute('data-value') || target.textContent || '').trim();
+    const currentValue = (target.textContent || '').trim();
     return Boolean(currentValue && !isPlaceholderOption(currentValue, 'has-value'));
   }
   if (target instanceof HTMLSelectElement) {
@@ -374,18 +574,33 @@ function getStoredChoice(
     };
   }
 
-  if (typeof entry?.answer !== 'string') return undefined;
+  const profileMatch = matchQuestion(question, profileCandidates(answers.profile, answers.profileQuestions), thresholds);
+  const profileValue = profileMatch.bestKey?.startsWith('profile.')
+    ? answers.profile?.[profileMatch.bestKey.slice('profile.'.length)]
+    : undefined;
+  const useProfileValue = (typeof profileValue === 'string' || typeof profileValue === 'number')
+    && profileMatch.confidence !== 'none'
+    && profileMatch.bestScore > (storedMatch?.score ?? 0);
+  const savedTextAnswer = typeof entry?.answer === 'string' ? entry.answer : undefined;
+  if (!useProfileValue && (savedTextAnswer === undefined || !savedTextAnswer.trim())) return undefined;
+  const selectedAnswer = useProfileValue
+    ? datePartForQuestion(profileMatch.bestKey!.slice('profile.'.length), String(profileValue), question)
+    : savedTextAnswer!;
+  const selectedAlternates = useProfileValue
+    ? answers.profileAlternates?.[profileMatch.bestKey!.slice('profile.'.length)] ?? []
+    : [];
   const selectedOption = chooseSavedAnswerOption(
-    entry.answer,
+    selectedAnswer,
     options,
-    storedMatch?.score ?? 0,
-    storedMatch?.runnerUpScore ?? 0,
+    useProfileValue ? profileMatch.bestScore : storedMatch?.score ?? 0,
+    useProfileValue ? profileMatch.secondScore : storedMatch?.runnerUpScore ?? 0,
+    selectedAlternates,
   );
   if (!selectedOption) return undefined;
   return {
     option: selectedOption,
-    confidence: storedMatch?.confidence ?? 'high',
-    sensitive: Boolean(entry.sensitive || /salary|compensation|race|ethnic|gender|disability|demograph/i.test(`${question} ${entry.questions.join(' ')}`)),
+    confidence: useProfileValue ? profileMatch.confidence : storedMatch?.confidence ?? 'high',
+    sensitive: Boolean(entry?.sensitive || /salary|compensation|race|ethnic|gender|disability|demograph/i.test(`${question} ${entry?.questions.join(' ') ?? ''}`)),
   };
 }
 
@@ -402,20 +617,15 @@ function installChoicePreview(
   clearActivePreview();
   if (hasRealChoice(target)) return;
   const suggestion = document.createElement('span');
-  suggestion.className = `job-autofill-choice-hint${highlighted ? ' is-highlighted' : ''}`;
+  suggestion.className = highlighted ? 'job-autofill-choice-hint is-highlighted' : 'job-autofill-choice-hint';
   suggestion.textContent = `Suggested: ${option.label}`;
-  let visualTarget: HTMLElement = target.getAttribute('role') === 'combobox' ? option.element : target;
-  if (target instanceof HTMLInputElement) {
-    visualTarget = target.labels?.[0] ?? target;
-  }
-  visualTarget.classList.add('job-autofill-option-preview');
-  if (highlighted) visualTarget.classList.add('is-highlighted');
-  const hintTarget = target.getAttribute('role') === 'combobox' ? target : visualTarget;
-  hintTarget.insertAdjacentElement('afterend', suggestion);
+  let visualTarget: HTMLElement = isChoiceWidget(target) ? option.element : target;
+  if (target instanceof HTMLInputElement) visualTarget = target.labels?.[0] ?? target;
+  if (highlighted) visualTarget.classList.add('job-autofill-option-preview');
+  (isChoiceWidget(target) ? target : visualTarget).insertAdjacentElement('afterend', suggestion);
 
   const restore = () => {
-    visualTarget.classList.remove('job-autofill-option-preview');
-    visualTarget.classList.remove('is-highlighted');
+    if (highlighted) visualTarget.classList.remove('job-autofill-option-preview');
     suggestion.remove();
     target.removeEventListener('keydown', onKeyDown, true);
     target.removeEventListener('blur', onBlur, true);
@@ -426,7 +636,7 @@ function installChoicePreview(
     if (hasRealChoice(target)) return;
     restore();
     activePreview = undefined;
-    if (target.getAttribute('role') === 'combobox') {
+    if (isChoiceWidget(target)) {
       option.element.click();
       dispatchNativeChoiceChange(target);
     } else if (target instanceof HTMLSelectElement) {
@@ -450,7 +660,7 @@ function installChoicePreview(
   const onKeyDown: EventListener = (rawEvent) => {
     const event = rawEvent as KeyboardEvent;
     if (event.key === 'Escape') {
-      if (target.getAttribute('role') !== 'combobox') event.preventDefault();
+      if (!isChoiceWidget(target)) event.preventDefault();
       restore();
       activePreview = undefined;
     } else if (event.key === 'Tab') {
@@ -477,16 +687,16 @@ export async function showChoicePreview(
   descriptor: DetectedField,
 ): Promise<void> {
   clearActivePreview();
-  const isCombobox = target.getAttribute('role') === 'combobox';
-  if (!isCombobox && !(target instanceof HTMLSelectElement) && !(target instanceof HTMLInputElement)) return;
-  if (!isCombobox && !(target instanceof HTMLSelectElement) && !['radio', 'checkbox'].includes((target as HTMLInputElement).type)) return;
-  if (isCombobox && target.getAttribute('aria-expanded') !== 'true') return;
+  const isChoiceWidgetTarget = isChoiceWidget(target);
+  if (!isChoiceWidgetTarget && !(target instanceof HTMLSelectElement) && !(target instanceof HTMLInputElement)) return;
+  if (!isChoiceWidgetTarget && !(target instanceof HTMLSelectElement) && !['radio', 'checkbox'].includes((target as HTMLInputElement).type)) return;
+  if (isChoiceWidgetTarget && !choiceWidgetExpanded(target)) return;
   if (hasRealChoice(target)) return;
 
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
     const stored = await browserApi.storage.local.get(['answers', 'matchingThresholds']);
-    if (document.activeElement !== target) return;
+    if (document.activeElement !== target && !target.contains(document.activeElement)) return;
     const answers = stored.answers as StoredAnswers | undefined;
     if (!answers) return;
     const thresholds = validThresholds(stored.matchingThresholds);
@@ -504,14 +714,26 @@ function installPreview(field: PreviewField, text: string, highlighted: boolean,
   clearActivePreview();
   if (field.value.length > 0) return;
 
+  const dateField = field instanceof HTMLInputElement && field.type === 'date';
   const originalPlaceholder = field.getAttribute('placeholder');
-  field.setAttribute('placeholder', text);
-  field.dataset.jobAutofillPreview = highlighted || blocked ? 'highlighted' : 'normal';
+  let suggestion: HTMLSpanElement | undefined;
+  if (dateField) {
+    suggestion = document.createElement('span');
+    suggestion.className = highlighted ? 'job-autofill-suggestion-hint is-highlighted' : 'job-autofill-suggestion-hint';
+    suggestion.textContent = `Suggested: ${text}`;
+    field.insertAdjacentElement('afterend', suggestion);
+  } else {
+    field.setAttribute('placeholder', text);
+    if (highlighted) field.dataset.jobAutofillPreview = 'highlighted';
+  }
   let accepted = false;
   const restore = () => {
-    if (originalPlaceholder === null) field.removeAttribute('placeholder');
-    else field.setAttribute('placeholder', originalPlaceholder);
-    delete field.dataset.jobAutofillPreview;
+    if (dateField) suggestion?.remove();
+    else {
+      if (originalPlaceholder === null) field.removeAttribute('placeholder');
+      else field.setAttribute('placeholder', originalPlaceholder);
+      if (highlighted) delete field.dataset.jobAutofillPreview;
+    }
     field.removeEventListener('keydown', onKeyDown, true);
     field.removeEventListener('input', onInput, true);
     field.removeEventListener('blur', onBlur, true);
@@ -595,7 +817,7 @@ export async function showTextPreview(
     const match = matchQuestion(descriptor.question, candidatesWithHints, thresholds);
     if (!match.bestKey || match.confidence === 'none') return;
     const answer = answerByKey.get(match.bestKey);
-    if (answer === undefined) return;
+    if (answer === undefined || !answer.trim()) return;
 
     const context = await previewContext(stored);
     const resolved = resolvePlaceholders(answer, context);

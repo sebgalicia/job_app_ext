@@ -5,6 +5,7 @@ const storageKey = 'answers';
 const thresholdsKey = 'matchingThresholds';
 const autofillKey = 'autofillOnOpen';
 type BrowserStorage = {
+  runtime: { getURL(path: string): string };
   storage: {
     local: {
       get(key: string): Promise<Record<string, unknown>>;
@@ -28,6 +29,12 @@ const matchingStatus = document.querySelector<HTMLParagraphElement>('#matching-s
 const autofillOnOpen = document.querySelector<HTMLInputElement>('#autofill-on-open')!;
 const autofillStatus = document.querySelector<HTMLParagraphElement>('#autofill-status')!;
 const settingsNavigation = [...document.querySelectorAll<HTMLAnchorElement>('.settings-nav a[href^="#"]')];
+const backButton = document.querySelector<HTMLButtonElement>('#settings-back')!;
+
+backButton.addEventListener('click', () => {
+  if (window.history.length > 1) window.history.back();
+  else window.location.assign(browserApi.runtime.getURL('popup.html'));
+});
 
 function updateSettingsNavigation(): void {
   const activeHash = window.location.hash || settingsNavigation[0]?.hash;

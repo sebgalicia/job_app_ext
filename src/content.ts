@@ -1,15 +1,15 @@
 import { chooseAdapter } from './adapters';
-import { describeFocusedField } from './adapters/field';
-import { autofillControl, dismissActivePreview, saveDetectedPageContext, showChoicePreview, showTextPreview } from './preview/text-preview';
+import { choiceWidgetExpanded, describeFocusedField, isChoiceWidget } from './adapters/field';
+import { autofillControl, detectPageContext, dismissActivePreview, saveDetectedPageContext, showChoicePreview, showTextPreview } from './preview/text-preview';
 
 const supportedControls = 'input, textarea, select';
 
 function isEligibleControl(target: EventTarget | null): target is HTMLElement {
   if (!(target instanceof HTMLElement)) return false;
-  if (target.getAttribute('role') === 'combobox') return true;
+  if (isChoiceWidget(target)) return true;
   if (!target.matches(supportedControls)) return false;
   if (target instanceof HTMLInputElement) {
-    return ['text', 'email', 'tel', 'url', 'search', 'number', 'radio', 'checkbox'].includes(target.type);
+    return ['text', 'email', 'tel', 'url', 'search', 'number', 'date', 'radio', 'checkbox'].includes(target.type);
   }
   return true;
 }
@@ -43,7 +43,11 @@ async function processFocusedControl(target: EventTarget | null): Promise<void> 
     document.dispatchEvent(new CustomEvent('job-autofill:question-detected', {
       detail: { ...descriptor, field: target },
     }));
-    if (descriptor.fieldType === 'text' && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+    const closedTextCombobox = isChoiceWidget(target)
+      && target instanceof HTMLInputElement
+      && !choiceWidgetExpanded(target);
+    if ((descriptor.fieldType === 'text' || closedTextCombobox)
+      && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
       await showTextPreview(target, descriptor);
     }
     else await showChoicePreview(target, descriptor);
@@ -57,9 +61,13 @@ function handleFocus(event: FocusEvent): void {
 }
 
 function refreshActiveCombobox(event: Event): void {
-  const eventTarget = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('[role="combobox"]') : null;
-  const activeTarget = document.activeElement instanceof HTMLElement
-    && document.activeElement.getAttribute('role') === 'combobox' ? document.activeElement : null;
+  const eventTarget = event.target instanceof HTMLElement
+    ? event.target.closest<HTMLElement>('[role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="true"], [data-automation-id="selectWidget"]')
+    : null;
+  const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const activeTarget = activeElement && isChoiceWidget(activeElement)
+    ? activeElement
+    : activeElement?.closest<HTMLElement>('[role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="true"], [data-automation-id="selectWidget"]') ?? null;
   const target = eventTarget ?? activeTarget;
   if (target) requestAnimationFrame(() => void processFocusedControl(target));
 }
@@ -79,6 +87,7 @@ async function autofillPageOnce(): Promise<void> {
     // A failed automatic pass remains contained to this page and does not submit the form.
   } finally {
     document.removeEventListener('focusin', handleFocus);
+    document.removeEventListener('input', refreshActiveCombobox);
     document.removeEventListener('click', refreshActiveCombobox);
     document.removeEventListener('keyup', refreshActiveCombobox);
     if (siteAllowsAutofill) document.addEventListener('click', handleStepAdvance);
@@ -87,7 +96,9 @@ async function autofillPageOnce(): Promise<void> {
 
 async function scanVisibleFieldsOnce(): Promise<void> {
   const adapter = chooseAdapter(document);
-  const controls = Array.from(document.querySelectorAll<HTMLElement>(`${supportedControls}, [role="combobox"]`));
+  const controls = Array.from(document.querySelectorAll<HTMLElement>(
+    `${supportedControls}, [role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="true"], [data-automation-id="selectWidget"]`,
+  ));
   const seenGroups = new Set<string>();
   for (const control of controls) {
     if (!isEligibleControl(control) || !control.isConnected || control.matches(':disabled, [readonly]')
@@ -123,6 +134,7 @@ if (!contentWorld[installationFlag]) {
   const frameMessageFlag = '__jobAutofillFrameMessage';
   // Matched pages and user-enabled tabs remain idle until a form field receives focus.
   document.addEventListener('focusin', handleFocus);
+  document.addEventListener('input', refreshActiveCombobox);
   document.addEventListener('click', refreshActiveCombobox);
   document.addEventListener('keyup', refreshActiveCombobox);
   // Run one bounded pass after the initial page has had a moment to render its form.
@@ -130,6 +142,12 @@ if (!contentWorld[installationFlag]) {
 
   previewBrowser.runtime.onMessage.addListener((message) => {
     if (message.type === 'content-ping') return { ready: true };
+    if (message.type === 'get-page-context') {
+      if (window.top !== window) return undefined;
+      const context = detectPageContext();
+      void saveDetectedPageContext();
+      return { context };
+    }
     if (message.type === 'site-state' && message.enabled === false) {
       dismissActivePreview();
       if (window.top === window) window.postMessage({ marker: frameMessageFlag, type: message.type }, '*');
@@ -140,6 +158,11 @@ if (!contentWorld[installationFlag]) {
     }
     return undefined;
   });
+
+  if (window.top === window) {
+    void saveDetectedPageContext();
+    window.setTimeout(() => void saveDetectedPageContext(), 900);
+  }
 
   window.addEventListener('message', (event: MessageEvent) => {
     if (window.top === window || event.source !== window.top || event.data?.marker !== frameMessageFlag) return;

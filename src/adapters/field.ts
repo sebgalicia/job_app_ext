@@ -11,6 +11,28 @@ export type DetectedField = {
   optionLabels: string[];
 };
 
+const choiceWidgetSelector = '[role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="true"], [data-automation-id="selectWidget"]';
+
+export function isChoiceWidget(field: HTMLElement): boolean {
+  return field.matches(choiceWidgetSelector);
+}
+
+export function choiceWidgetExpanded(field: HTMLElement): boolean {
+  if (field.getAttribute('aria-expanded') === 'true'
+    || field.querySelector('[aria-expanded="true"]')) return true;
+  const active = field.ownerDocument.activeElement;
+  if (active !== field && !(active instanceof Node && field.contains(active))) return false;
+  const ids = `${field.getAttribute('aria-controls') ?? ''} ${field.getAttribute('aria-owns') ?? ''}`.trim().split(/\s+/).filter(Boolean);
+  if (ids.some((id) => {
+    const popup = field.ownerDocument.getElementById(id);
+    return popup instanceof HTMLElement && isVisible(popup)
+      && popup.querySelector('[role="option"], [data-automation-id="promptOption"], [data-automation-id="menuItem"]');
+  })) return true;
+  return Array.from(field.ownerDocument.querySelectorAll<HTMLElement>(
+    '[role="option"], [data-automation-id="promptOption"], [data-automation-id="menuItem"]',
+  )).some(isVisible);
+}
+
 function optionLabel(option: HTMLOptionElement): string {
   return option.label.trim() || option.textContent?.trim() || '';
 }
@@ -25,7 +47,7 @@ function groupMembers(field: HTMLElement): HTMLElement[] {
 }
 
 export function ariaComboboxOptions(field: HTMLElement): HTMLElement[] {
-  if (field.getAttribute('role') !== 'combobox' || field.getAttribute('aria-expanded') !== 'true') return [];
+  if (!isChoiceWidget(field) || !choiceWidgetExpanded(field)) return [];
   const ids = new Set(`${field.getAttribute('aria-controls') ?? ''} ${field.getAttribute('aria-owns') ?? ''}`.trim().split(/\s+/).filter(Boolean));
   const listboxes = new Set(Array.from(ids).flatMap((id) => {
     const element = field.ownerDocument.getElementById(id);
@@ -34,10 +56,31 @@ export function ariaComboboxOptions(field: HTMLElement): HTMLElement[] {
       ? [element]
       : Array.from(element.querySelectorAll<HTMLElement>('[role="listbox"]'));
   }).filter((listbox) => listbox.getAttribute('aria-multiselectable') !== 'true'));
-  return Array.from(new Set(Array.from(listboxes).flatMap((listbox) => Array.from(listbox.querySelectorAll<HTMLElement>('[role="option"]')))))
+  // Workday and some Greenhouse builds render an open popup without linking it
+  // through aria-controls; use only visible listboxes/options in that case.
+  if (listboxes.size === 0) {
+    for (const listbox of field.ownerDocument.querySelectorAll<HTMLElement>('[role="listbox"]')) {
+      if (listbox.getAttribute('aria-multiselectable') !== 'true' && isVisible(listbox)) listboxes.add(listbox);
+    }
+  }
+  const fromListboxes = Array.from(listboxes).flatMap((listbox) => Array.from(listbox.querySelectorAll<HTMLElement>(
+    '[role="option"], [data-automation-id="promptOption"], [data-automation-id="menuItem"]',
+  )));
+  const candidates = fromListboxes.length > 0 ? fromListboxes : Array.from(field.ownerDocument.querySelectorAll<HTMLElement>(
+    '[role="option"], [data-automation-id="promptOption"], [data-automation-id="menuItem"]',
+  )).filter(isVisible);
+  return Array.from(new Set(candidates))
     .filter((option) => option.getAttribute('aria-disabled') !== 'true'
+      && option.getAttribute('data-automation-id') !== 'promptOptionDisabled'
       && !option.hasAttribute('hidden')
-      && !option.closest('[hidden], [aria-hidden="true"]'));
+      && !option.closest('[hidden], [aria-hidden="true"]')
+      && isVisible(option));
+}
+
+function isVisible(element: HTMLElement): boolean {
+  return element.isConnected && element.getClientRects().length > 0
+    && !element.closest('[hidden], [aria-hidden="true"]')
+    && getComputedStyle(element).visibility !== 'hidden';
 }
 
 export function describeFocusedField(
@@ -49,7 +92,7 @@ export function describeFocusedField(
   let fieldType: DetectedField['fieldType'] = 'text';
   let optionLabels: string[] = [];
 
-  if (field.getAttribute('role') === 'combobox') {
+  if (isChoiceWidget(field)) {
     fieldType = 'choice';
     optionLabels = ariaComboboxOptions(field).map((option) =>
       (option.getAttribute('aria-label') || option.textContent || '').replace(/\s+/g, ' ').trim(),
@@ -69,7 +112,9 @@ export function describeFocusedField(
 
   return {
     adapter: adapter.name,
-    question: questionParts.join(' '),
+    // The first part is the accessible, user-facing label. Keep noisy nearby
+    // text, IDs, and placeholders as fallbacks instead of diluting that label.
+    question: questionParts[0] ?? questionParts.join(' '),
     questionParts,
     fieldType,
     inputType: field instanceof HTMLInputElement ? field.type : undefined,

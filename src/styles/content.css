@@ -1,0 +1,25 @@
+/* Highlight uncertain suggestions only; never set page-wide or default field styles. */
+input[data-job-autofill-preview="highlighted"]::placeholder,
+textarea[data-job-autofill-preview="highlighted"]::placeholder {
+  color: #b27a16;
+  opacity: 1;
+  text-decoration: underline dotted;
+}
+
+.job-autofill-suggestion-hint.is-highlighted {
+  color: #8b5b08;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.15em;
+}
+
+.job-autofill-option-preview {
+  outline: 2px solid #b27a16 !important;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.job-autofill-choice-hint.is-highlighted {
+  color: #8b5b08;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.15em;
+}

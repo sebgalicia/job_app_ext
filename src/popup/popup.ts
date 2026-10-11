@@ -17,6 +17,7 @@ type PopupBrowser = {
   scripting: {
     executeScript(details: { target: { tabId: number; allFrames: boolean }; files: string[] }): Promise<unknown>;
     insertCSS(details: { target: { tabId: number; allFrames: boolean }; files: string[] }): Promise<unknown>;
+    removeCSS(details: { target: { tabId: number; allFrames: boolean }; files: string[] }): Promise<unknown>;
   };
 };
 
@@ -48,8 +49,19 @@ function companyFromUrl(url: URL): string | undefined {
   else if (url.hostname === 'boards.greenhouse.io' || url.hostname === 'job-boards.greenhouse.io') slug = url.pathname.split('/').filter(Boolean)[0];
   else if (['jobs.lever.co', 'jobs.ashbyhq.com'].includes(url.hostname)) slug = url.pathname.split('/').filter(Boolean)[0];
   else if (url.hostname.endsWith('.smartrecruiters.com')) slug = url.pathname.split('/').filter(Boolean)[0];
-  if (!slug) return undefined;
-  return slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (letter) => letter.toLocaleUpperCase());
+  if (slug && !/^(?:jobs?|careers?|apply|external|en-us)$/i.test(slug)) {
+    try { slug = decodeURIComponent(slug); } catch { /* Keep the literal URL segment. */ }
+    return slug.replace(/[-_]+/g, ' ').replace(/\b\w/g, (letter) => letter.toLocaleUpperCase());
+  }
+
+  const labels = url.hostname.toLocaleLowerCase().split('.').filter(Boolean);
+  const ignored = /^(?:www|jobs?|careers?|apply|boards|job-boards|myworkdayjobs|myworkday|greenhouse|lever|ashbyhq|smartrecruiters|icims|taleo|workday|indeed|linkedin|ziprecruiter)$/i;
+  let index = labels.length - 2;
+  if (/^(?:co|com|org|net|gov|edu)$/i.test(labels[index] ?? '') && index > 0) index -= 1;
+  const candidate = labels[index];
+  return candidate && !ignored.test(candidate)
+    ? candidate.replace(/[-_]+/g, ' ').replace(/\b\w/g, (letter) => letter.toLocaleUpperCase())
+    : undefined;
 }
 
 function contextFromTitle(title: string, url: URL): JobContext {
@@ -59,7 +71,7 @@ function contextFromTitle(title: string, url: URL): JobContext {
   const genericRole = Boolean(titleRole && /^(careers?|jobs?|open positions|job openings)$/i.test(titleRole));
   return {
     role: (!genericRole && titleRole) || pieces.find((part) => !/^(careers?|jobs?)(?:\s+at\s+.*)?$/i.test(part)) || undefined,
-    company: atMatch?.[2]?.trim() || companyFromUrl(url),
+    company: atMatch?.[2]?.trim() || (title.includes('|') ? title.split('|').at(-1)?.trim() : undefined) || companyFromUrl(url),
   };
 }
 
@@ -151,6 +163,9 @@ enableCurrentPage.addEventListener('click', async () => {
       return;
     }
     const target = { tabId: activeTab.id, allFrames: true };
+    // Older builds injected the extension's full UI stylesheet as content.css.
+    // Remove that previous injection from this document before adding preview-only styles.
+    await browserApi.scripting.removeCSS({ target, files: ['content.css'] }).catch(() => undefined);
     await browserApi.scripting.executeScript({ target, files: ['content.js'] });
     await browserApi.scripting.insertCSS({ target, files: ['content.css'] });
     await persistSiteEnabled(true);
@@ -172,6 +187,13 @@ async function initialize(): Promise<void> {
   hostname = pageUrl?.hostname || 'current-page';
   contextStorageKey = `${hostname}${pageUrl?.pathname ?? ''}`;
   siteName.textContent = pageUrl ? (hostname || 'Browser internal page') : 'This browser page cannot be accessed';
+  let pageContext: JobContext | undefined;
+  if (activeTab.id !== undefined) {
+    try {
+      const reply = await browserApi.tabs.sendMessage(activeTab.id, { type: 'get-page-context' }) as { context?: JobContext };
+      pageContext = reply?.context;
+    } catch { /* The page may not have an extension content script. */ }
+  }
   const stored = await browserApi.storage.local.get(['siteEnabled', 'jobContextOverrides', 'detectedPageContexts', 'trackedApplications']);
   siteEnabled = (stored.siteEnabled as Record<string, boolean> | undefined) ?? {};
   contextOverrides = (stored.jobContextOverrides as Record<string, JobContext> | undefined) ?? {};
@@ -180,7 +202,7 @@ async function initialize(): Promise<void> {
   renderTrackedApplications();
   const detectedContexts = (stored.detectedPageContexts as Record<string, JobContext> | undefined) ?? {};
   const inferred = pageUrl ? contextFromTitle(activeTab.title ?? '', pageUrl) : {};
-  const context = mergeContext(inferred, detectedContexts[contextStorageKey], contextOverrides[contextStorageKey]);
+  const context = mergeContext(inferred, detectedContexts[contextStorageKey], pageContext, contextOverrides[contextStorageKey]);
   companyInput.value = context.company ?? '';
   roleInput.value = context.role ?? '';
   enabledInput.checked = siteEnabled[hostname] !== false;

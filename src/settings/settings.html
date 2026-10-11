@@ -9,7 +9,7 @@
   <body class="settings-page">
     <div class="settings-layout">
       <aside class="settings-sidebar" aria-label="Settings navigation">
-        <a class="sidebar-title" href="#top"><span aria-hidden="true">‹</span> Settings</a>
+        <button id="settings-back" class="sidebar-title" type="button"><span aria-hidden="true">←</span> Back</button>
         <nav class="settings-nav">
           <p class="nav-group-title">Personal setup</p>
           <a href="#answers-section" class="active" aria-current="location">
@@ -49,6 +49,7 @@
         <p id="saved-state" class="saved-state">Checking local storage...</p>
         <label class="input-label" for="answers-file">Answers file</label>
         <input id="answers-file" type="file" accept="application/json,.json">
+        <p class="help-text sample-download">New here? <a href="answers-sample.json" download="job-autofill-answers-sample.json">Download the sample answers file</a>, edit your copy, then select it above.</p>
         <div class="actions">
           <button id="import-button" class="button button-primary" type="button">Validate and import</button>
           <button id="export-button" class="button button-secondary" type="button" disabled>Export saved answers</button>

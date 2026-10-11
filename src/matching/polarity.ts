@@ -1,4 +1,4 @@
-export type Topic = 'needsSponsorship' | 'authorizedToWork' | 'willingToRelocate' | 'over18';
+export type Topic = 'needsSponsorship' | 'authorizedToWork' | 'willingToRelocate' | 'over18' | 'conflictOfInterest';
 export type PolarityResult = { topic?: Topic; flips: number; ambiguous: boolean };
 
 const topicPatterns: Array<[Topic, RegExp]> = [
@@ -6,6 +6,7 @@ const topicPatterns: Array<[Topic, RegExp]> = [
   ['authorizedToWork', /\b(?:un?authori[sz]ed|authori[sz]ed|authori[sz]ation|ineligible|eligible|legally permitted|permitted|right to work|work authorization)\b/i],
   ['willingToRelocate', /\b(relocat(?:e|ion|ing)|move to another location)\b/i],
   ['over18', /\b(over 18|under 18|at least 18|18 years of age|age requirement)\b/i],
+  ['conflictOfInterest', /\b(?:conflicts? of interest|COI)\b/i],
 ];
 
 const negationPatterns: Partial<Record<Topic, RegExp[]>> = {
@@ -28,6 +29,11 @@ const negationPatterns: Partial<Record<Topic, RegExp[]>> = {
   over18: [
     /\b(?:not|under|younger than|less than)\s+(?:over\s+)?18\b/gi,
     /\bnot\s+(?:at least|18 years of age)\b/gi,
+  ],
+  conflictOfInterest: [
+    /\b(?:no|without|free from|free of|not aware of any)\s+(?:(?:actual|potential|known)\s+)?conflicts? of interest\b/gi,
+    /\bno\s+COI\b/gi,
+    /\b(?:do not|don't|does not|doesn't|have no|has no)\s+(?:have\s+)?(?:(?:any|a|an|actual|potential)\s+)?(?:conflicts? of interest|COI)\b/gi,
   ],
 };
 

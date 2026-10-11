@@ -507,7 +507,21 @@ button[hidden] {
   color: var(--text);
   font-size: 1.05rem;
   font-weight: 650;
-  text-decoration: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.sidebar-title:hover {
+  color: var(--accent);
+}
+
+.sample-download a {
+  color: var(--accent);
+  font-weight: 650;
+  text-underline-offset: 0.15em;
 }
 
 .sidebar-title span {
@@ -778,44 +792,6 @@ input[type="file"]::file-selector-button {
   color: var(--muted);
   font-size: 0.78rem;
   text-align: left;
-}
-
-input[data-job-autofill-preview="normal"]::placeholder,
-textarea[data-job-autofill-preview="normal"]::placeholder {
-  color: #7c8490;
-  opacity: 1;
-}
-
-input[data-job-autofill-preview="highlighted"]::placeholder,
-textarea[data-job-autofill-preview="highlighted"]::placeholder {
-  color: #8a5a00;
-  opacity: 1;
-  text-decoration: underline dotted;
-}
-
-.job-autofill-option-preview {
-  outline: 2px solid #667085 !important;
-  outline-offset: 2px;
-  border-radius: 3px;
-}
-
-.job-autofill-option-preview.is-highlighted {
-  outline-color: #8a5a00 !important;
-}
-
-.job-autofill-choice-hint {
-  display: inline-block;
-  margin: 0.25rem 0.5rem;
-  padding: 0.1rem 0.4rem;
-  border: 1px solid #7c8490;
-  border-radius: 0.35rem;
-  color: #59616c;
-  font: 12px/1.4 system-ui, sans-serif;
-}
-
-.job-autofill-choice-hint.is-highlighted {
-  border-color: #8a5a00;
-  color: #8a5a00;
 }
 
 @media (max-width: 420px) {

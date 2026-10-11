@@ -36,7 +36,7 @@ async function copyStaticFiles() {
   await cp(resolve(root, 'src/popup/popup.html'), resolve(out, 'popup.html'));
   await cp(resolve(root, 'src/settings/settings.html'), resolve(out, 'settings.html'));
   await cp(resolve(root, 'src/styles'), resolve(out), { recursive: true });
-  await cp(resolve(root, 'src/styles/base.css'), resolve(out, 'content.css'));
+  await cp(resolve(root, 'template.json'), resolve(out, 'answers-sample.json'));
 }
 
 await compileAnswersSchema();

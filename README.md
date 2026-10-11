@@ -33,9 +33,24 @@ The temporary add-on stays installed until Firefox restarts. Build again after c
 
 ## Prepare your answers
 
-Start with [`template.json`](template.json), which contains fake example details. In VS Code, open it and choose **File > Save As...**, then save your copy in the repository root as `answers.private.json`. That filename is ignored by Git, so it will not appear as a file to commit. You can also save it outside this repository if you prefer. Do not put real details in `template.json`.
+Start by downloading the sample answers file from the extension Settings page. It contains fake example details. Edit the downloaded copy and import it from Settings; you do not need to visit GitHub or edit files in the repository. Developers can also start with [`template.json`](template.json). In VS Code, choose **File > Save As...** and save a private copy in the repository root as `answers.private.json`; that filename is ignored by Git. Do not put real details in `template.json`.
 
-Edit `answers.private.json` and replace the examples in `profile`, `facts`, and `answers` with your own information. The [`answers.schema.json`](answers.schema.json) file describes the format and enables editor hints in tools such as VS Code. In the extension's Settings, import your private copy; invalid files are rejected with specific errors. Importing stores the answers in the browser's local storage on your device. You can export the saved copy from Settings as well.
+Edit your downloaded file and replace the examples in `profile`, `facts`, and `answers` with your own information. You can add custom keys to `profile` with string or number values. Add `profileQuestions` labels under the same key so the extension knows the wording application forms may use. For example:
+
+```json
+{
+  "profile": { "desiredShift": "Evenings" },
+  "profileQuestions": {
+    "desiredShift": ["Preferred shift", "What schedule can you work?"]
+  }
+}
+```
+
+If a profile answer has different equivalent labels across application forms, list those in `profileAlternates` using the same profile key. For example, keep one main `state` value in `profile.state` and list `"Massachusetts"` or other equivalent labels in `profileAlternates.state`. The main profile value is used for text boxes; both it and its alternatives are considered when matching a dropdown choice. Custom fields work the same way: use `profileQuestions` to match question wording and `profileAlternates` to match equivalent dropdown choices. The [`answers.schema.json`](answers.schema.json) file describes the format and enables editor hints in tools such as VS Code. In the extension's Settings, import your private copy; invalid files are rejected with specific errors. Importing stores the answers in the browser's local storage on your device. You can export the saved copy from Settings as well.
+
+The sample now includes optional fields for middle/preferred name, pronouns, address line 2, current location, portfolio, school location, degree completion, major/minor, GPA and scale, school attendance dates, graduation year, current or most recent employer and title, employment dates and description, experience length, availability, notice period, preferred work location, skills, certifications, languages, references, and a professional summary. Blank fields are ignored. For education dates, use `schoolStartDate` and `schoolEndDate` in `YYYY-MM-DD` format, or use separate `schoolStartDateMonth`, `schoolStartDateYear`, `schoolEndDateMonth`, and `schoolEndDateYear` values when the form asks for separate dropdowns. The flat profile represents one primary education record and one current or most recent job; use `answers` for additional schools, past jobs, and employer-specific questions.
+
+For a conflict-of-interest question, `facts.conflictOfInterest` can be `true` if you have a conflict or `false` if you do not. It is blank in the sample because that answer depends on your situation. Do not add personal or demographic answers unless you choose to provide them.
 
 If you choose a different filename inside the repository, add it to `.gitignore` before committing. Never commit a completed answers file or share it publicly; you do not need to send your personal answers to anyone to use the extension.
 
@@ -56,6 +71,8 @@ Answers, preferences, thresholds, company and role context, and opt-in tracked a
 ## Supported sites
 
 Built-in page access covers Workday, Greenhouse, Lever, Ashby, iCIMS, Taleo, and SmartRecruiters. A generic form adapter handles common field markup, and you can temporarily enable the extension on other sites from the popup. Employers customize their forms, so support for one company's form does not guarantee every form on that platform works.
+
+Company and role detection checks job-posting structured data, page metadata and headings, the tab title, known ATS URL patterns, and finally the site's domain. It saves what it can when the page opens; review or correct the values in the popup. Websites do not share one universal page format, so unusual or heavily customized sites may still need a manual correction.
 
 ## Project files
 
