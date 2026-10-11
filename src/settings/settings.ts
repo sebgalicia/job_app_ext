@@ -27,10 +27,24 @@ const mediumThresholdValue = document.querySelector<HTMLOutputElement>('#medium-
 const matchingStatus = document.querySelector<HTMLParagraphElement>('#matching-status')!;
 const autofillOnOpen = document.querySelector<HTMLInputElement>('#autofill-on-open')!;
 const autofillStatus = document.querySelector<HTMLParagraphElement>('#autofill-status')!;
+const settingsNavigation = [...document.querySelectorAll<HTMLAnchorElement>('.settings-nav a[href^="#"]')];
+
+function updateSettingsNavigation(): void {
+  const activeHash = window.location.hash || settingsNavigation[0]?.hash;
+  for (const link of settingsNavigation) {
+    const active = link.hash === activeHash;
+    link.classList.toggle('active', active);
+    if (active) link.setAttribute('aria-current', 'location');
+    else link.removeAttribute('aria-current');
+  }
+}
+
+window.addEventListener('hashchange', updateSettingsNavigation);
+updateSettingsNavigation();
 
 function showStatus(message: string, isError = false): void {
   importStatus.textContent = message;
-  importStatus.className = isError ? 'status error' : 'status success';
+  importStatus.className = isError ? 'status-message error' : 'status-message success';
 }
 
 function showErrors(errors: string[]): void {
@@ -58,10 +72,10 @@ async function saveThresholds(changed: 'high' | 'medium'): Promise<void> {
   try {
     await browserApi.storage.local.set({ [thresholdsKey]: thresholds });
     matchingStatus.textContent = 'Matching thresholds saved on this device.';
-    matchingStatus.className = 'success';
+    matchingStatus.className = 'status-message success';
   } catch {
     matchingStatus.textContent = 'Could not save matching thresholds.';
-    matchingStatus.className = 'error';
+    matchingStatus.className = 'status-message error';
   }
 }
 
@@ -87,7 +101,7 @@ async function loadThresholds(): Promise<void> {
   } catch {
     renderThresholds(defaultThresholds);
     matchingStatus.textContent = 'Could not read saved thresholds; using defaults.';
-    matchingStatus.className = 'error';
+    matchingStatus.className = 'status-message error';
   }
 }
 
@@ -97,10 +111,10 @@ autofillOnOpen.addEventListener('change', async () => {
     autofillStatus.textContent = autofillOnOpen.checked
       ? 'One-pass automatic filling is enabled on pages opened from now on.'
       : 'One-pass automatic filling is disabled.';
-    autofillStatus.className = 'success';
+    autofillStatus.className = 'status-message success';
   } catch {
     autofillStatus.textContent = 'Could not save the automatic filling setting.';
-    autofillStatus.className = 'error';
+    autofillStatus.className = 'status-message error';
     autofillOnOpen.checked = false;
   }
 });
@@ -112,7 +126,7 @@ async function loadAutofillSetting(): Promise<void> {
   } catch {
     autofillOnOpen.checked = false;
     autofillStatus.textContent = 'Could not read the setting; automatic filling is off.';
-    autofillStatus.className = 'error';
+    autofillStatus.className = 'status-message error';
   }
 }
 

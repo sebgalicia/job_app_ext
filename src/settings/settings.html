@@ -6,45 +6,91 @@
     <title>Job Autofill settings</title>
     <link rel="stylesheet" href="base.css">
   </head>
-  <body>
-    <main>
-      <h1>Job Autofill settings</h1>
-      <p>Import your answers file. It is validated before being saved on this device.</p>
+  <body class="settings-page">
+    <div class="settings-layout">
+      <aside class="settings-sidebar" aria-label="Settings navigation">
+        <a class="sidebar-title" href="#top"><span aria-hidden="true">‹</span> Settings</a>
+        <nav class="settings-nav">
+          <p class="nav-group-title">Personal setup</p>
+          <a href="#answers-section" class="active" aria-current="location">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 2.75h6l4 4v10.5H5zM11 2.75v4h4M7.5 11h5M7.5 14h5"/></svg>
+            <span>Saved answers</span>
+          </a>
+          <a href="#matching-section">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 5h12M4 10h12M4 15h12M8 3.5v3M12 8.5v3M7 13.5v3"/></svg>
+            <span>Matching confidence</span>
+          </a>
+          <p class="nav-group-title nav-group-spaced">Autofill</p>
+          <a href="#autofill-section">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11.3 2.5 5.5 10h4l-.8 7.5 5.8-8h-4z"/></svg>
+            <span>Automatic filling</span>
+          </a>
+        </nav>
+        <p class="sidebar-note">Your data stays on this device.</p>
+      </aside>
 
-      <section aria-labelledby="answers-heading">
-        <h2 id="answers-heading">Saved answers</h2>
-        <p id="saved-state">Checking local storage…</p>
-        <label for="answers-file">Choose an answers JSON file</label>
+      <main id="top" class="app-shell settings-shell">
+        <header class="settings-header">
+          <p class="breadcrumbs">Preferences <span aria-hidden="true">/</span> Settings</p>
+          <h1>Settings</h1>
+          <p class="page-intro">Manage your answers and choose how Job Autofill works.</p>
+        </header>
+
+        <div class="info-banner" role="note">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.25"/><path d="M10 8.5v4M10 6.2h.01"/></svg>
+          <span>Your answers and preferences are saved only in this browser.</span>
+        </div>
+
+      <section id="answers-section" class="settings-section" aria-labelledby="answers-heading">
+        <div class="section-heading">
+          <h2 id="answers-heading">Your answers</h2>
+          <p>Import a JSON file to use your saved information on application forms.</p>
+        </div>
+        <p id="saved-state" class="saved-state">Checking local storage...</p>
+        <label class="input-label" for="answers-file">Answers file</label>
         <input id="answers-file" type="file" accept="application/json,.json">
         <div class="actions">
-          <button id="import-button" type="button">Validate and import</button>
-          <button id="export-button" type="button" disabled>Export saved answers</button>
+          <button id="import-button" class="button button-primary" type="button">Validate and import</button>
+          <button id="export-button" class="button button-secondary" type="button" disabled>Export saved answers</button>
         </div>
-        <div id="import-status" role="status" aria-live="polite"></div>
+        <div id="import-status" class="status-message" role="status" aria-live="polite"></div>
         <ul id="validation-errors" class="errors" aria-label="Validation errors"></ul>
       </section>
 
-      <section aria-labelledby="matching-heading">
-        <h2 id="matching-heading">Matching confidence</h2>
-        <p>Adjust when answer previews appear. Higher values require a closer question match.</p>
-        <label for="high-threshold">High confidence: <output id="high-threshold-value">0.72</output></label>
-        <input id="high-threshold" type="range" min="0.51" max="0.95" step="0.01" value="0.72">
-        <label for="medium-threshold">Medium confidence: <output id="medium-threshold-value">0.50</output></label>
-        <input id="medium-threshold" type="range" min="0.30" max="0.94" step="0.01" value="0.50">
-        <p id="matching-status" role="status" aria-live="polite"></p>
+      <section id="matching-section" class="settings-section" aria-labelledby="matching-heading">
+        <div class="section-heading">
+          <h2 id="matching-heading">Matching confidence</h2>
+          <p>Set how closely a question must match before an answer is suggested.</p>
+        </div>
+        <div class="range-field">
+          <label for="high-threshold">High confidence <output id="high-threshold-value">0.72</output></label>
+          <input id="high-threshold" type="range" min="0.51" max="0.95" step="0.01" value="0.72">
+          <p>A regular preview appears at or above this score.</p>
+        </div>
+        <div class="range-field">
+          <label for="medium-threshold">Medium confidence <output id="medium-threshold-value">0.50</output></label>
+          <input id="medium-threshold" type="range" min="0.30" max="0.94" step="0.01" value="0.50">
+          <p>A highlighted preview appears between Medium and High.</p>
+        </div>
+        <p id="matching-status" class="status-message" role="status" aria-live="polite"></p>
       </section>
 
-      <section aria-labelledby="autofill-heading">
-        <h2 id="autofill-heading">Automatic filling</h2>
+      <section id="autofill-section" class="settings-section" aria-labelledby="autofill-heading">
+        <div class="section-heading">
+          <h2 id="autofill-heading">Automatic filling</h2>
+          <p>Optional help for application forms with multiple steps.</p>
+        </div>
         <label class="switch-row" for="autofill-on-open">
+          <span class="switch-copy"><strong>Fill fields as each step opens</strong><small>Off by default. You stay in control of when the form moves forward.</small></span>
           <input id="autofill-on-open" type="checkbox">
-          <span>Fill matching fields as each step opens, then wait</span>
         </label>
-        <p>When enabled, the extension fills visible, empty fields with a Medium or High question match when the page opens. It then waits for you to press a Next or Continue button before checking the newly shown step. It does not submit the application or show focus previews. Review the filled fields before submitting.</p>
-        <p id="autofill-status" role="status" aria-live="polite"></p>
+        <p class="help-text">When enabled, visible empty fields with a Medium or High match are filled when a step opens. The extension waits for you to press Next or Continue before checking the next step. It never submits the application. Review each step before continuing.</p>
+        <p id="autofill-status" class="status-message" role="status" aria-live="polite"></p>
       </section>
 
-    </main>
+      <footer class="settings-footer">Job Autofill stores your answers and preferences locally in this browser.</footer>
+      </main>
+    </div>
     <script src="settings.js"></script>
   </body>
 </html>

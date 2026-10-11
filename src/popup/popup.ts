@@ -73,7 +73,7 @@ function mergeContext(...contexts: Array<JobContext | undefined>): JobContext {
 
 function showStatus(message: string, error = false): void {
   status.textContent = message;
-  status.className = error ? 'error' : 'success';
+  status.className = error ? 'status-message error' : 'status-message success';
 }
 
 let activeTab: Tab;

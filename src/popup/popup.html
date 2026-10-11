@@ -6,34 +6,54 @@
     <title>Job Autofill</title>
     <link rel="stylesheet" href="base.css">
   </head>
-  <body>
-    <main>
-      <h1>Job Autofill</h1>
-      <p id="site-name">Current site</p>
-      <label class="switch-row" for="site-enabled">
-        <input id="site-enabled" type="checkbox">
-        <span>Enable previews on this site</span>
-      </label>
-      <section aria-labelledby="context-heading">
-        <h2 id="context-heading">Application details</h2>
-        <label for="company">Company</label>
-        <input id="company" type="text" autocomplete="organization">
-        <label for="role">Role</label>
-        <input id="role" type="text">
-        <label class="switch-row" for="track-application">
-          <input id="track-application" type="checkbox">
-          <span>Add this application to my job tracker</span>
+  <body class="popup-page">
+    <main class="app-shell popup-shell">
+      <header class="app-header">
+        <div class="header-copy">
+          <h1>Job Autofill</h1>
+          <p id="site-name" class="site-name">Current site</p>
+        </div>
+      </header>
+
+      <section class="card site-card" aria-label="Site controls">
+        <label class="switch-row" for="site-enabled">
+          <span class="switch-copy"><strong>Previews on this site</strong><small>Turn matching on or off for this application site.</small></span>
+          <input id="site-enabled" type="checkbox">
         </label>
-        <button id="save-context" type="button">Save details</button>
+        <button id="enable-current-page" class="button button-secondary full-width" type="button" hidden>Enable on this page</button>
       </section>
-      <section aria-labelledby="tracker-heading">
-        <h2 id="tracker-heading">Tracked applications</h2>
-        <ul id="tracked-applications"></ul>
+
+      <section class="card" aria-labelledby="context-heading">
+        <div class="section-heading">
+          <h2 id="context-heading">Application details</h2>
+          <p>Used to personalize saved answers.</p>
+        </div>
+        <div class="field-grid">
+          <label for="company">Company</label>
+          <input id="company" type="text" autocomplete="organization" placeholder="Company name">
+          <label for="role">Role</label>
+          <input id="role" type="text" placeholder="Job title">
+        </div>
+        <label class="switch-row tracker-toggle" for="track-application">
+          <span class="switch-copy"><strong>Track this application</strong><small>Save it to your private job tracker.</small></span>
+          <input id="track-application" type="checkbox">
+        </label>
+        <button id="save-context" class="button button-primary full-width" type="button">Save details</button>
       </section>
-      <p id="match-count" aria-live="polite">Matched fields on this page: 0</p>
-      <button id="enable-current-page" type="button" hidden>Enable on this page</button>
-      <p id="popup-status" role="status" aria-live="polite"></p>
-      <a href="settings.html" target="_blank">Open settings</a>
+
+      <section class="card tracker-card" aria-labelledby="tracker-heading">
+        <div class="section-heading">
+          <h2 id="tracker-heading">Job tracker</h2>
+          <span class="section-note">Saved on this device</span>
+        </div>
+        <ul id="tracked-applications" class="application-list"></ul>
+      </section>
+
+      <footer class="popup-footer">
+        <p id="match-count" class="match-count" aria-live="polite">Matched fields on this page: 0</p>
+        <p id="popup-status" class="status-message" role="status" aria-live="polite"></p>
+        <a class="settings-link" href="settings.html" target="_blank">Settings <span aria-hidden="true">↗</span></a>
+      </footer>
     </main>
     <script src="popup.js"></script>
   </body>
