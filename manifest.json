@@ -3,7 +3,7 @@
   "name": "Job Autofill",
   "version": "0.1.0",
   "description": "Private, rules-based previews for your saved job application answers.",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "tabs"],
   "optional_permissions": ["scripting"],
   "action": { "default_title": "Job Autofill", "default_popup": "popup.html" },
   "options_ui": { "page": "settings.html", "open_in_tab": true },

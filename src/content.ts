@@ -1,6 +1,6 @@
 import { chooseAdapter } from './adapters';
 import { choiceWidgetExpanded, describeFocusedField, isChoiceWidget } from './adapters/field';
-import { autofillControl, detectPageContext, dismissActivePreview, saveDetectedPageContext, showChoicePreview, showTextPreview } from './preview/text-preview';
+import { autoAgreeTermsControl, autofillControl, detectPageContext, dismissActivePreview, saveDetectedPageContext, showChoicePreview, showTextPreview } from './preview/text-preview';
 
 const supportedControls = 'input, textarea, select';
 
@@ -23,22 +23,24 @@ const previewBrowser = (globalThis as typeof globalThis & { browser: {
 } }).browser;
 
 let pageAutomationStopped = false;
+let onePassSiteAllowed = false;
 let nextStepScanTimer: number | undefined;
 const onePassAutofillEnabled = previewBrowser.storage.local.get('autofillOnOpen')
   .then((stored) => stored.autofillOnOpen === true)
   .catch(() => false);
 
 async function processFocusedControl(target: EventTarget | null): Promise<void> {
-  if (pageAutomationStopped || await onePassAutofillEnabled) return;
   if (!isEligibleControl(target)) return;
   try {
-    const stored = await previewBrowser.storage.local.get('siteEnabled');
+    const stored = await previewBrowser.storage.local.get(['siteEnabled', 'autoAgreeTerms']);
     const siteEnabled = stored.siteEnabled as Record<string, boolean> | undefined;
     if (siteEnabled?.[location.hostname] === false) return;
     void saveDetectedPageContext();
     const adapter = chooseAdapter(document);
     const descriptor = describeFocusedField(target, adapter);
     if (!descriptor.question) return;
+    if (stored.autoAgreeTerms === true) await autoAgreeTermsControl(target, descriptor);
+    if (pageAutomationStopped || await onePassAutofillEnabled) return;
 
     document.dispatchEvent(new CustomEvent('job-autofill:question-detected', {
       detail: { ...descriptor, field: target },
@@ -75,26 +77,31 @@ function refreshActiveCombobox(event: Event): void {
 async function autofillPageOnce(): Promise<void> {
   if (!await onePassAutofillEnabled) return;
   pageAutomationStopped = true;
-  let siteAllowsAutofill = false;
   try {
     const stored = await previewBrowser.storage.local.get('siteEnabled');
     const siteEnabled = stored.siteEnabled as Record<string, boolean> | undefined;
     if (siteEnabled?.[location.hostname] === false) return;
-    siteAllowsAutofill = true;
+    onePassSiteAllowed = true;
 
-    await scanVisibleFieldsOnce();
+    await scanVisibleFieldsOnce(true);
   } catch {
     // A failed automatic pass remains contained to this page and does not submit the form.
   } finally {
-    document.removeEventListener('focusin', handleFocus);
-    document.removeEventListener('input', refreshActiveCombobox);
-    document.removeEventListener('click', refreshActiveCombobox);
-    document.removeEventListener('keyup', refreshActiveCombobox);
-    if (siteAllowsAutofill) document.addEventListener('click', handleStepAdvance);
+    const settings = await previewBrowser.storage.local.get('autoAgreeTerms').catch(() => ({ autoAgreeTerms: false }));
+    if (settings.autoAgreeTerms !== true) {
+      document.removeEventListener('focusin', handleFocus);
+      document.removeEventListener('input', refreshActiveCombobox);
+      document.removeEventListener('click', refreshActiveCombobox);
+      document.removeEventListener('keyup', refreshActiveCombobox);
+    }
   }
 }
 
-async function scanVisibleFieldsOnce(): Promise<void> {
+async function scanVisibleFieldsOnce(includeRegularAutofill: boolean): Promise<void> {
+  const settings = await previewBrowser.storage.local.get(['siteEnabled', 'autoAgreeTerms']);
+  const siteEnabled = settings.siteEnabled as Record<string, boolean> | undefined;
+  if (siteEnabled?.[location.hostname] === false) return;
+  if (!includeRegularAutofill && settings.autoAgreeTerms !== true) return;
   const adapter = chooseAdapter(document);
   const controls = Array.from(document.querySelectorAll<HTMLElement>(
     `${supportedControls}, [role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="true"], [data-automation-id="selectWidget"]`,
@@ -109,12 +116,14 @@ async function scanVisibleFieldsOnce(): Promise<void> {
       seenGroups.add(groupKey);
     }
     const descriptor = describeFocusedField(control, adapter);
-    if (descriptor.question) await autofillControl(control, descriptor);
+    if (!descriptor.question) continue;
+    if (settings.autoAgreeTerms === true) await autoAgreeTermsControl(control, descriptor);
+    if (includeRegularAutofill) await autofillControl(control, descriptor);
   }
 }
 
 function handleStepAdvance(event: MouseEvent): void {
-  if (!event.isTrusted || !pageAutomationStopped || !(event.target instanceof Element)) return;
+  if (!event.isTrusted || !(event.target instanceof Element)) return;
   const action = event.target.closest<HTMLElement>('button, input[type="submit"], input[type="button"], [role="button"], a');
   if (!action) return;
   const label = (action.getAttribute('aria-label') || action.textContent ||
@@ -123,8 +132,13 @@ function handleStepAdvance(event: MouseEvent): void {
   if (nextStepScanTimer !== undefined) window.clearTimeout(nextStepScanTimer);
   nextStepScanTimer = window.setTimeout(() => {
     nextStepScanTimer = undefined;
-    void scanVisibleFieldsOnce().catch(() => undefined);
+    void scanVisibleFieldsOnce(pageAutomationStopped && onePassSiteAllowed).catch(() => undefined);
   }, 500);
+}
+
+async function initialPagePass(): Promise<void> {
+  if (await onePassAutofillEnabled) await autofillPageOnce();
+  else await scanVisibleFieldsOnce(false);
 }
 
 const installationFlag = '__jobAutofillContentInstalled';
@@ -132,13 +146,14 @@ const contentWorld = globalThis as typeof globalThis & Record<string, unknown>;
 if (!contentWorld[installationFlag]) {
   contentWorld[installationFlag] = true;
   const frameMessageFlag = '__jobAutofillFrameMessage';
-  // Matched pages and user-enabled tabs remain idle until a form field receives focus.
+  // With optional automation off, pages remain idle until a form field receives focus.
   document.addEventListener('focusin', handleFocus);
   document.addEventListener('input', refreshActiveCombobox);
   document.addEventListener('click', refreshActiveCombobox);
   document.addEventListener('keyup', refreshActiveCombobox);
   // Run one bounded pass after the initial page has had a moment to render its form.
-  window.setTimeout(() => void autofillPageOnce(), 350);
+  window.setTimeout(() => void initialPagePass().catch(() => undefined), 350);
+  document.addEventListener('click', handleStepAdvance);
 
   previewBrowser.runtime.onMessage.addListener((message) => {
     if (message.type === 'content-ping') return { ready: true };

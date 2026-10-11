@@ -401,6 +401,103 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
   }
 }
 
+function agreementPromptText(target: HTMLElement, descriptor: DetectedField): string {
+  const parts = [...descriptor.questionParts, descriptor.question];
+  const wrapper = target.closest<HTMLElement>(
+    'label, fieldset, [role="group"], .field, .application-question, [data-qa="question"], [data-testid*="question" i], [data-automation-id="formField"], [data-automation-id="question"]',
+  );
+  const wrapperText = wrapper?.textContent?.replace(/\s+/g, ' ').trim();
+  if (wrapperText && wrapperText.length <= 2000) parts.push(wrapperText);
+  return parts.join(' ');
+}
+
+function isAgreementPrompt(question: string): boolean {
+  const termsOrPolicy = /\b(?:terms?\s+(?:of service|and conditions)|privacy policy|end[- ]user license agreement)\b/i.test(question);
+  const factualAcknowledgment = /\backnowledg(?:e|ment)\b/i.test(question)
+    && /\b(?:read|understood|reviewed|truthfully|accurately|above questions)\b/i.test(question);
+  return termsOrPolicy || factualAcknowledgment;
+}
+
+function isAffirmativeAgreementLabel(label: string): boolean {
+  const normalized = label.toLocaleLowerCase().replace(/[’']/g, '').replace(/[.,:;!]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return /^(?:yes|yes i agree(?: to .+)?|yes i accept(?: .+)?|yes i acknowledge(?: that .+)?|i have read and agree(?: to .+)?|i have read and accept(?: .+)?|i agree(?: to .+)?|agree(?: to .+)?|i accept(?: .+)?|accept(?: .+)?|i acknowledge(?: that .+)?|acknowledge(?: that .+)?|i consent(?: .+)?|consent(?: .+)?)$/i.test(normalized);
+}
+
+/** Opt-in helper: select only a clear affirmative control on an agreement prompt. */
+function setAgreementText(target: HTMLElement, value: string): boolean {
+  if (target instanceof HTMLInputElement) {
+    if (!['text', 'search', 'date'].includes(target.type) || target.value.trim()) return false;
+  } else if (target instanceof HTMLTextAreaElement) {
+    if (target.value.trim()) return false;
+  } else return false;
+  nativeSetValue(target, value);
+  reportMatchedField(target);
+  return true;
+}
+
+function localDateValue(question: string, field: HTMLInputElement): string {
+  const now = new Date();
+  const year = String(now.getFullYear());
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  if (field.type === 'date' || /\byyyy\s*[-/]\s*mm\s*[-/]\s*dd\b/i.test(`${question} ${field.placeholder}`)) return `${year}-${month}-${day}`;
+  if (/\bdd\s*[-/.]\s*mm\s*[-/.]\s*yyyy\b/i.test(`${question} ${field.placeholder}`)) return `${day}/${month}/${year}`;
+  if (/\bmm\s*[-/.]\s*dd\s*[-/.]\s*yyyy\b/i.test(`${question} ${field.placeholder}`)) return `${month}/${day}/${year}`;
+  return new Intl.DateTimeFormat(undefined, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+}
+
+/** Opt-in helper: accept clear agreement prompts and fill their explicit signature/date fields. */
+export async function autoAgreeTermsControl(target: HTMLElement, descriptor: DetectedField): Promise<boolean> {
+  if (!target.isConnected) return false;
+  const prompt = agreementPromptText(target, descriptor);
+  const agreementPrompt = isAgreementPrompt(prompt);
+  const fieldLabel = descriptor.questionParts.join(' ') || descriptor.question;
+  const signatureField = /\b(?:signature|sign your name|digitally sign|electronic signature|e-signature|name to sign|name as (?:your )?(?:electronic )?signature|(?:type|enter) (?:your )?(?:full |legal )?name.{0,24}\bsign)\b/i.test(fieldLabel);
+  const signedDateField = /\b(?:date signed|signed date|signature date|date of (?:your )?signature|date of acknowledgment|acknowledgment date|date you signed)\b/i.test(fieldLabel)
+    || (/\bdate\b/i.test(fieldLabel) && (agreementPrompt || /\bsignature\b/i.test(prompt)));
+  const explicitlyRelatedField = agreementPrompt || signatureField || signedDateField;
+  if (!explicitlyRelatedField) return false;
+
+  if (agreementPrompt && !hasRealChoice(target)) {
+    const affirmative = focusedChoices(target).filter((option) => isAffirmativeAgreementLabel(option.label));
+    if (affirmative.length === 1 && setChoiceValue(target, affirmative[0])) {
+      reportMatchedField(target);
+      return true;
+    }
+
+    if (target instanceof HTMLInputElement && target.type === 'checkbox') {
+      const label = target.labels?.[0]?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+      if (isAffirmativeAgreementLabel(label)) {
+        target.checked = true;
+        dispatchNativeChoiceChange(target);
+        reportMatchedField(target);
+        return true;
+      }
+    }
+
+    const explicitYesInstruction = /\b(?:enter|type)\s+["“']?yes\b/i.test(prompt);
+    if (explicitYesInstruction && (target instanceof HTMLTextAreaElement
+      || (target instanceof HTMLInputElement && ['text', 'search'].includes(target.type)))) {
+      return setAgreementText(target, 'yes');
+    }
+  }
+
+  if (signatureField && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+    const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
+    const stored = await browserApi.storage.local.get('answers');
+    const profile = (stored.answers as StoredAnswers | undefined)?.profile;
+    const legalName = [profile?.firstName, profile?.middleName, profile?.lastName]
+      .map((part) => String(part ?? '').trim()).filter(Boolean).join(' ');
+    const name = legalName || String(profile?.preferredName ?? '').trim();
+    if (name) return setAgreementText(target, name);
+  }
+
+  if (signedDateField && target instanceof HTMLInputElement) {
+    return setAgreementText(target, localDateValue(prompt, target));
+  }
+  return false;
+}
+
 function clearActivePreview(): void {
   activePreview?.cleanup();
   activePreview = undefined;

@@ -18,6 +18,9 @@ export function validateAnswers(value: unknown): ValidationResult {
     if (error.keyword === 'required') {
       return `${path} is missing required field "${error.params.missingProperty}"`;
     }
+    if (error.keyword === 'additionalProperties') {
+      return `${path}.${error.params.additionalProperty} is not an allowed property`;
+    }
     return `${path} ${error.message ?? 'is invalid'}`;
   });
 

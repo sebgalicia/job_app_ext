@@ -87,6 +87,12 @@
         </label>
         <p class="help-text">When enabled, visible empty fields with a Medium or High match are filled when a step opens. The extension waits for you to press Next or Continue before checking the next step. It never submits the application. Review each step before continuing.</p>
         <p id="autofill-status" class="status-message" role="status" aria-live="polite"></p>
+        <label class="switch-row" for="auto-agree-terms">
+          <span class="switch-copy"><strong>Auto-select agreement and acknowledgment</strong><small>Off by default. Only acts on clear terms or acknowledgment prompts.</small></span>
+          <input id="auto-agree-terms" type="checkbox">
+        </label>
+        <p class="help-text">When enabled, the extension selects a clear “Yes” or “I agree” response, signs explicit signature fields with your saved name, and fills dates for agreement fields with today’s local date. It types “yes” only when a prompt explicitly asks you to enter it. It never submits the application. Enable this only if you want these acknowledgments completed automatically.</p>
+        <p id="auto-agree-status" class="status-message" role="status" aria-live="polite"></p>
       </section>
 
       <footer class="settings-footer">Job Autofill stores your answers and preferences locally in this browser.</footer>
