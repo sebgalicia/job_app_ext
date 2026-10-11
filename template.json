@@ -1,5 +1,5 @@
 {
-  "_instructions": "EXAMPLE ONLY: Replace all fake profile and answer values before using this file. Blank fields are optional. Enter dates as YYYY-MM-DD for date fields. This profile stores one main education record and one current or most recent job; use answers below for additional custom questions. You may add custom keys to profile (string or number values); add matching form labels under profileQuestions using the same key. Keep your completed file private.",
+  "_instructions": "EXAMPLE ONLY: Replace all fake profile and answer values before using this file. Blank fields are optional. Enter dates as YYYY-MM-DD for date fields. This profile stores one main education record and one current or most recent job; use answers below for additional custom questions. You may add custom keys to profile (string or number values); add matching form labels under profileQuestions using the same key. For question-specific dropdown answers, use type choice and enter the exact option; for shared yes/no facts, fill facts with true or false. Only answer acknowledgments after reading and agreeing. Keep your completed file private.",
   "profile": {
     "firstName": "Jordan", "middleName": "", "lastName": "Example", "preferredName": "", "email": "jordan@example.com", "phone": "555-0100", "phoneDeviceType": "", "pronouns": "",
     "address": "123 Main Street", "addressLine2": "", "city": "Boston", "state": "MA", "zip": "02110", "country": "United States", "currentLocation": "",
@@ -18,8 +18,18 @@
     "degree": ["Bachelor's degree", "Bachelors", "BA", "B.A."],
     "state": ["Massachusetts", "Commonwealth of Massachusetts"]
   },
-  "facts": { "needsSponsorship": false, "authorizedToWork": true, "willingToRelocate": true, "over18": true, "salaryExpectation": "$100,000", "conflictOfInterest": "" },
+  "facts": { "needsSponsorship": "", "authorizedToWork": "", "willingToRelocate": "", "over18": "", "salaryExpectation": "", "conflictOfInterest": "" },
   "answers": [
+    { "questions": ["Would you consider relocating for this role?", "Are you willing to relocate for this role?"], "type": "yesno", "answer": "" },
+    { "questions": ["In your current job, do you use or work on the Workday system?", "Do you use or work on Workday in your current job?"], "type": "choice", "answer": "", "sensitive": true },
+    { "questions": ["Which of the following best describes your current status?", "What best describes your current employment status?"], "type": "choice", "answer": "" },
+    { "questions": ["Are you authorized to work in the country where this job is located?", "Are you legally authorized to work in this country?"], "type": "yesno", "answer": "", "sensitive": true },
+    { "questions": ["Do you now or in the future require any immigration filing or visa sponsorship to maintain work authorization, including sponsorship by Workday, renewal or extension of an open work permit, permanent residency, etc.?", "Will you now or in the future need immigration filing or visa sponsorship to maintain work authorization?"], "type": "yesno", "answer": "", "sensitive": true },
+    { "questions": ["Are you a current or former employee of the United States government?", "Have you ever been employed by the U.S. government?"], "type": "choice", "answer": "", "sensitive": true },
+    { "questions": ["Are you a current citizen, national or resident of Iran, Cuba, North Korea, Syria, Crimea, Donetsk People's Republic, or Luhansk People's Republic?", "Are you a citizen or resident of a country or region listed under U.S. Export Control laws?"], "type": "choice", "answer": "", "sensitive": true },
+    { "questions": ["Are you related to a current Workday employee?", "Are you related to anyone currently employed by Workday?"], "type": "choice", "answer": "", "sensitive": true },
+    { "questions": ["To the best of your knowledge, are you related to an employee of a customer, or a government official, who has direct business interactions with Workday?", "Are you related to a customer employee or government official who directly does business with Workday?"], "type": "choice", "answer": "", "sensitive": true },
+    { "questions": ["I acknowledge that I have read, understood and reviewed the above questions, and I have answered them truthfully and accurately. I understand that an employment offer is conditioned on the truth of my statements and may be rescinded or my employment terminated if information is inaccurate or misleading. Please enter yes if you acknowledge."], "type": "text", "answer": "", "sensitive": true },
     { "questions": ["Why do you want to work here?", "Why this company?"], "type": "text", "answer": "I am excited about the {role} opportunity at {company}." },
     { "questions": ["Preferred work location", "Which office location do you prefer?"], "type": "choice", "answer": "Boston" },
     { "questions": ["Are you authorized to work in the United States?", "Are you legally eligible to work here?"], "type": "yesno", "answer": true },

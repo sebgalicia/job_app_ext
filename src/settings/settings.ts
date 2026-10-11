@@ -4,8 +4,13 @@ import { validateAnswers } from '../validation';
 const storageKey = 'answers';
 const thresholdsKey = 'matchingThresholds';
 const autofillKey = 'autofillOnOpen';
+const autoAgreeKey = 'autoAgreeTerms';
 type BrowserStorage = {
   runtime: { getURL(path: string): string };
+  tabs?: {
+    getCurrent(): Promise<{ id?: number } | undefined>;
+    remove(tabId: number): Promise<void>;
+  };
   storage: {
     local: {
       get(key: string): Promise<Record<string, unknown>>;
@@ -28,12 +33,31 @@ const mediumThresholdValue = document.querySelector<HTMLOutputElement>('#medium-
 const matchingStatus = document.querySelector<HTMLParagraphElement>('#matching-status')!;
 const autofillOnOpen = document.querySelector<HTMLInputElement>('#autofill-on-open')!;
 const autofillStatus = document.querySelector<HTMLParagraphElement>('#autofill-status')!;
+const autoAgreeTerms = document.querySelector<HTMLInputElement>('#auto-agree-terms')!;
+const autoAgreeStatus = document.querySelector<HTMLParagraphElement>('#auto-agree-status')!;
 const settingsNavigation = [...document.querySelectorAll<HTMLAnchorElement>('.settings-nav a[href^="#"]')];
 const backButton = document.querySelector<HTMLButtonElement>('#settings-back')!;
 
 backButton.addEventListener('click', () => {
-  if (window.history.length > 1) window.history.back();
-  else window.location.assign(browserApi.runtime.getURL('popup.html'));
+  void (async () => {
+    try {
+      const currentTab = await browserApi.tabs?.getCurrent();
+      if (currentTab?.id !== undefined && browserApi.tabs?.remove) {
+        await browserApi.tabs.remove(currentTab.id);
+        return;
+      }
+    } catch {
+      // The extension tab API may be unavailable in some browsers/contexts.
+    }
+
+    window.close();
+    window.setTimeout(() => {
+      if (!window.closed) {
+        if (window.history.length > 1) window.history.back();
+        else window.location.assign(browserApi.runtime.getURL('popup.html'));
+      }
+    }, 100);
+  })();
 });
 
 function updateSettingsNavigation(): void {
@@ -137,6 +161,31 @@ async function loadAutofillSetting(): Promise<void> {
   }
 }
 
+autoAgreeTerms.addEventListener('change', async () => {
+  try {
+    await browserApi.storage.local.set({ [autoAgreeKey]: autoAgreeTerms.checked });
+    autoAgreeStatus.textContent = autoAgreeTerms.checked
+      ? 'Automatic agreement selection is enabled for newly opened steps.'
+      : 'Automatic agreement selection is disabled.';
+    autoAgreeStatus.className = 'status-message success';
+  } catch {
+    autoAgreeStatus.textContent = 'Could not save the agreement setting.';
+    autoAgreeStatus.className = 'status-message error';
+    autoAgreeTerms.checked = false;
+  }
+});
+
+async function loadAutoAgreeSetting(): Promise<void> {
+  try {
+    const stored = await browserApi.storage.local.get(autoAgreeKey);
+    autoAgreeTerms.checked = stored[autoAgreeKey] === true;
+  } catch {
+    autoAgreeTerms.checked = false;
+    autoAgreeStatus.textContent = 'Could not read the agreement setting; automatic selection is off.';
+    autoAgreeStatus.className = 'status-message error';
+  }
+}
+
 importButton.addEventListener('click', async () => {
   showErrors([]);
   const file = fileInput.files?.[0];
@@ -196,3 +245,4 @@ exportButton.addEventListener('click', async () => {
 void refreshSavedState();
 void loadThresholds();
 void loadAutofillSetting();
+void loadAutoAgreeSetting();
