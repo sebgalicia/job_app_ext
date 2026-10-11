@@ -2,3 +2,8 @@ node_modules/
 dist/
 web-ext-artifacts/
 src/generated/answers-validator.js
+
+# Personal answers files (keep your real profile out of GitHub)
+/answers.json
+/answers.private.json
+/private-answers/

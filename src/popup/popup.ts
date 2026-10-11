@@ -30,6 +30,7 @@ const trackApplicationInput = document.querySelector<HTMLInputElement>('#track-a
 const trackedApplicationsList = document.querySelector<HTMLUListElement>('#tracked-applications')!;
 const matchCount = document.querySelector<HTMLParagraphElement>('#match-count')!;
 const enableCurrentPage = document.querySelector<HTMLButtonElement>('#enable-current-page')!;
+const pageAccessHelp = document.querySelector<HTMLParagraphElement>('#page-access-help')!;
 const status = document.querySelector<HTMLParagraphElement>('#popup-status')!;
 
 function isSupportedHost(hostname: string): boolean {
@@ -157,6 +158,7 @@ enableCurrentPage.addEventListener('click', async () => {
     enabledInput.checked = true;
     enabledInput.disabled = false;
     enableCurrentPage.hidden = true;
+    pageAccessHelp.hidden = true;
     showStatus('Previews enabled for this tab.');
   } catch {
     showStatus('Could not enable previews on this page.', true);
@@ -189,7 +191,14 @@ async function initialize(): Promise<void> {
       contentScriptAvailable = reply?.ready === true;
     } catch { contentScriptAvailable = false; }
   }
-  enableCurrentPage.hidden = !pageUrl || supported || contentScriptAvailable;
+  const canEnableCurrentPage = Boolean(pageUrl && !supported && !contentScriptAvailable);
+  const localSample = hostname === 'localhost' || hostname === '127.0.0.1';
+  enableCurrentPage.hidden = !canEnableCurrentPage;
+  enableCurrentPage.textContent = localSample ? 'Enable sample page' : 'Enable on this page';
+  pageAccessHelp.hidden = !canEnableCurrentPage;
+  pageAccessHelp.textContent = localSample
+    ? 'This local sample needs one click to enable it for this tab. Then focus an empty field to see a preview.'
+    : 'This site is outside the built-in list. You can enable it for this tab only.';
   enabledInput.disabled = !pageUrl || (!supported && !contentScriptAvailable);
 
   if (activeTab.id !== undefined) {

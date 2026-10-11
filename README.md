@@ -33,7 +33,11 @@ The temporary add-on stays installed until Firefox restarts. Build again after c
 
 ## Prepare your answers
 
-Start with [`template.json`](template.json). Save a private copy and fill in its `profile`, `facts`, and `answers` sections. The [`answers.schema.json`](answers.schema.json) file describes the format and enables editor hints in tools such as VS Code. Import your copy from Settings; invalid files are rejected with specific errors. You can export the saved copy from Settings as well.
+Start with [`template.json`](template.json), which contains fake example details. In VS Code, open it and choose **File > Save As...**, then save your copy in the repository root as `answers.private.json`. That filename is ignored by Git, so it will not appear as a file to commit. You can also save it outside this repository if you prefer. Do not put real details in `template.json`.
+
+Edit `answers.private.json` and replace the examples in `profile`, `facts`, and `answers` with your own information. The [`answers.schema.json`](answers.schema.json) file describes the format and enables editor hints in tools such as VS Code. In the extension's Settings, import your private copy; invalid files are rejected with specific errors. Importing stores the answers in the browser's local storage on your device. You can export the saved copy from Settings as well.
+
+If you choose a different filename inside the repository, add it to `.gitignore` before committing. Never commit a completed answers file or share it publicly; you do not need to send your personal answers to anyone to use the extension.
 
 Keep personal answers private. Do not add your completed answers file to this repository.
 

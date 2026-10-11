@@ -394,6 +394,17 @@ button[hidden] {
   display: none;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+.access-help {
+  margin: 0.7rem 0 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
 .match-count {
   flex: 1;
   margin: 0;
