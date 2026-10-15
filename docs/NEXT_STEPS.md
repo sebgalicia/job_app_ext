@@ -2,11 +2,14 @@
 
 The extension uses local, rules-based matching. Remaining work is focused on Firefox quality and release:
 
-1. Run the manual checklist in Firefox against representative Workday, Greenhouse, Lever, Ashby, iCIMS, Taleo, and SmartRecruiters application pages; fix issues found. Fixture checks alone do not establish production-site support.
-2. Submit an unlisted release on addons.mozilla.org and test the signed package in Firefox.
-3. Polish user-facing navigation and documentation, and prepare the Firefox listing description and screenshots.
-4. Address review feedback and publish the listed Firefox release.
-5. After the Firefox extension is complete and ready, port it to Chrome and verify browser API, permissions, and embedded-form behavior there.
+1. Continue fixing dropdown questions across Workday, Greenhouse, Lever, Ashby, iCIMS, Taleo, SmartRecruiters, and generic application forms. Prioritize real-site issues such as custom controls, option matching, and multi-step forms; update fixtures and the manual checklist to cover each confirmed fix.
+2. Add a separate, user-uploadable work-history JSON format for multiple jobs, with each job's title, employer, description, start date, and end date. Define how imported work history should be matched to repeated or differently worded application fields.
+3. Explore optional local answer learning from user corrections or confirmed selections. Make learned changes reviewable and explicitly approved before they are added to the user's answers; do not silently save guesses or sensitive answers.
+4. Run the manual checklist in Firefox against representative Workday, Greenhouse, Lever, Ashby, iCIMS, Taleo, and SmartRecruiters application pages; fix issues found. Fixture checks alone do not establish production-site support.
+5. Submit an unlisted release on addons.mozilla.org and test the signed package in Firefox.
+6. Polish user-facing navigation and documentation, and prepare the Firefox listing description and screenshots.
+7. Address review feedback and publish the listed Firefox release.
+8. After the Firefox extension is complete and ready, port it to Chrome and verify browser API, permissions, and embedded-form behavior there.
 
 ## Current implementation notes
 

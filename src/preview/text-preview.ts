@@ -21,6 +21,7 @@ type StorageBrowser = {
 type PreviewField = HTMLInputElement | HTMLTextAreaElement;
 type PreviewTarget = HTMLElement;
 type SelectChoice = ChoiceOption & { element: HTMLElement };
+type PageContext = { company?: string; role?: string };
 
 const profileQuestions: Record<string, string[]> = {
   firstName: ['first name', 'given name', 'your first name'],
@@ -96,6 +97,12 @@ export function resolvePlaceholders(
     return `[${name} missing]`;
   });
   return { text, missing: [...new Set(missing)] };
+}
+
+function resolveQuestionPlaceholders(question: string, context: PageContext): string {
+  return question.replace(/\{(company|role)\}/gi, (_match, rawName: string) => {
+    return context[rawName.toLowerCase() as 'company' | 'role']?.trim() || `{${rawName.toLowerCase()}}`;
+  });
 }
 
 function cleanContextLabel(value: string | undefined): string | undefined {
@@ -253,6 +260,7 @@ async function previewContext(stored: Record<string, unknown>): Promise<{ compan
 function profileCandidates(
   profile: StoredAnswers['profile'],
   customQuestions?: StoredAnswers['profileQuestions'],
+  context: PageContext = {},
 ): MatchCandidate[] {
   return Object.entries(profile ?? {}).flatMap(([key, value]) => {
     if (typeof value !== 'string' && typeof value !== 'number') return [];
@@ -262,20 +270,21 @@ function profileCandidates(
       .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
       .replace(/[_-]+/g, ' ')
       .trim();
-    const labels = [...(profileQuestions[key] ?? []), ...(customQuestions?.[key] ?? [])];
+    const labels = [...(profileQuestions[key] ?? []), ...(customQuestions?.[key] ?? [])]
+      .map((label) => resolveQuestionPlaceholders(label, context));
     if (labels.length === 0) labels.push(inferredKeyLabel);
     return [{ key: `profile.${key}`, questions: labels }];
   });
 }
 
-function makeCandidates(answers: StoredAnswers): { candidates: MatchCandidate[]; answerByKey: Map<string, string>; sensitiveByKey: Set<string> } {
-  const candidates = profileCandidates(answers.profile, answers.profileQuestions);
+function makeCandidates(answers: StoredAnswers, context: PageContext = {}): { candidates: MatchCandidate[]; answerByKey: Map<string, string>; sensitiveByKey: Set<string> } {
+  const candidates = profileCandidates(answers.profile, answers.profileQuestions, context);
   const answerByKey = new Map<string, string>();
   const sensitiveByKey = new Set<string>();
   for (const [index, entry] of (answers.answers ?? []).entries()) {
     if (entry.type !== 'text' || typeof entry.answer !== 'string' || !entry.answer.trim()) continue;
     const key = `answers[${index}]`;
-    candidates.push({ key, questions: entry.questions });
+    candidates.push({ key, questions: entry.questions.map((question) => resolveQuestionPlaceholders(question, context)) });
     answerByKey.set(key, entry.answer);
       if (entry.sensitive || /sponsor|visa|authori[sz]|eligible|salary|compensation|demograph|race|gender|disability/i.test(entry.questions.join(' '))) {
       sensitiveByKey.add(key);
@@ -363,12 +372,13 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
       && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement);
     if (isText) {
       if (target.value.trim().length > 0 || (target instanceof HTMLInputElement && !previewableInputTypes.has(target.type))) return false;
-      const stored = await browserApi.storage.local.get(['answers', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
+    const stored = await browserApi.storage.local.get(['answers', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
       if (!target.isConnected || target.value.length > 0) return false;
       const answers = stored.answers as StoredAnswers | undefined;
       if (!answers) return false;
       const thresholds = validThresholds(stored.matchingThresholds);
-      const { candidates, answerByKey } = makeCandidates(answers);
+      const context = await previewContext(stored);
+      const { candidates, answerByKey } = makeCandidates(answers, context);
       const hint = profileTypeHint(descriptor);
       const hintedKey = hint ? `profile.${hint}` : undefined;
       const candidatesWithHints = candidates.map((candidate) => ({
@@ -379,7 +389,7 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
       if (!match.bestKey || match.confidence === 'none') return false;
       const answer = answerByKey.get(match.bestKey);
       if (answer === undefined) return false;
-      const resolved = resolvePlaceholders(answer, await previewContext(stored));
+      const resolved = resolvePlaceholders(answer, context);
       if (resolved.missing.length > 0 || !resolved.text.trim() || !target.isConnected || target.value.length > 0) return false;
       nativeSetValue(target, resolved.text);
       reportMatchedField(target);
@@ -387,11 +397,12 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
     }
 
     if (hasRealChoice(target)) return false;
-    const stored = await browserApi.storage.local.get(['answers', 'matchingThresholds']);
+      const stored = await browserApi.storage.local.get(['answers', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
     if (!target.isConnected || hasRealChoice(target)) return false;
     const answers = stored.answers as StoredAnswers | undefined;
     if (!answers) return false;
-    const choice = getStoredChoice(descriptor.question, focusedChoices(target), answers, validThresholds(stored.matchingThresholds));
+    const context = await previewContext(stored);
+    const choice = getStoredChoice(descriptor.question, focusedChoices(target), answers, validThresholds(stored.matchingThresholds), context);
     if (!choice || !setChoiceValue(target, choice.option)) return false;
     reportMatchedField(target);
     return true;
@@ -622,13 +633,13 @@ function hasRealChoice(target: HTMLElement): boolean {
   return controls.some((input) => input.checked);
 }
 
-function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Array<'choice' | 'yesno'>, thresholds: Thresholds) {
+function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Array<'choice' | 'yesno'>, thresholds: Thresholds, context: PageContext) {
   const candidates: MatchCandidate[] = [];
   const entries = new Map<string, NonNullable<StoredAnswers['answers']>[number]>();
   for (const [index, entry] of (answers.answers ?? []).entries()) {
     if ((entry.type !== 'choice' && entry.type !== 'yesno') || !allowed.includes(entry.type)) continue;
     const key = `answers[${index}]`;
-    candidates.push({ key, questions: entry.questions });
+    candidates.push({ key, questions: entry.questions.map((wording) => resolveQuestionPlaceholders(wording, context)) });
     entries.set(key, entry);
   }
   const match = matchQuestion(question, candidates, thresholds);
@@ -649,9 +660,10 @@ function getStoredChoice(
   options: SelectChoice[],
   answers: StoredAnswers,
   thresholds: Thresholds,
+  context: PageContext = {},
 ): { option: SelectChoice; confidence: 'high' | 'medium'; sensitive: boolean } | undefined {
   if (options.length === 0) return undefined;
-  const storedMatch = matchStoredEntry(question, answers, ['choice', 'yesno'], thresholds);
+  const storedMatch = matchStoredEntry(question, answers, ['choice', 'yesno'], thresholds, context);
   const fact = factFor(question, answers);
   const entry = storedMatch?.entry;
   const booleanAnswer = entry?.type === 'yesno' && typeof entry.answer === 'boolean'
@@ -671,7 +683,7 @@ function getStoredChoice(
     };
   }
 
-  const profileMatch = matchQuestion(question, profileCandidates(answers.profile, answers.profileQuestions), thresholds);
+  const profileMatch = matchQuestion(question, profileCandidates(answers.profile, answers.profileQuestions, context), thresholds);
   const profileValue = profileMatch.bestKey?.startsWith('profile.')
     ? answers.profile?.[profileMatch.bestKey.slice('profile.'.length)]
     : undefined;
@@ -792,13 +804,14 @@ export async function showChoicePreview(
 
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    const stored = await browserApi.storage.local.get(['answers', 'matchingThresholds']);
+    const stored = await browserApi.storage.local.get(['answers', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
     if (document.activeElement !== target && !target.contains(document.activeElement)) return;
     const answers = stored.answers as StoredAnswers | undefined;
     if (!answers) return;
     const thresholds = validThresholds(stored.matchingThresholds);
     const options = focusedChoices(target);
-    const choice = getStoredChoice(descriptor.question, options, answers, thresholds);
+    const context = await previewContext(stored);
+    const choice = getStoredChoice(descriptor.question, options, answers, thresholds, context);
     if (!choice) return;
     const highlighted = choice.confidence === 'medium' || choice.sensitive;
     installChoicePreview(target, choice.option, highlighted);
@@ -904,7 +917,8 @@ export async function showTextPreview(
     if (!answers) return;
     const thresholds = validThresholds(stored.matchingThresholds);
 
-    const { candidates, answerByKey, sensitiveByKey } = makeCandidates(answers);
+    const context = await previewContext(stored);
+    const { candidates, answerByKey, sensitiveByKey } = makeCandidates(answers, context);
     const hint = profileTypeHint(descriptor);
     const hintedKey = hint ? `profile.${hint}` : undefined;
     const candidatesWithHints = candidates.map((candidate) => ({
@@ -916,7 +930,6 @@ export async function showTextPreview(
     const answer = answerByKey.get(match.bestKey);
     if (answer === undefined || !answer.trim()) return;
 
-    const context = await previewContext(stored);
     const resolved = resolvePlaceholders(answer, context);
     const highlighted = match.confidence === 'medium' || sensitiveByKey.has(match.bestKey) || resolved.missing.length > 0;
     installPreview(target, resolved.text, highlighted, resolved.missing.length > 0);
