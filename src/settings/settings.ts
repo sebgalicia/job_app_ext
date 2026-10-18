@@ -6,7 +6,10 @@ const storageKey = 'answers';
 const thresholdsKey = 'matchingThresholds';
 const autofillKey = 'autofillOnOpen';
 const autoAgreeKey = 'autoAgreeTerms';
+<<<<<<< HEAD
 const workHistoryKey = 'workHistory';
+=======
+>>>>>>> 2ecc2e7d9b96b1e25caa5c1c5d48d0b147d0d1b0
 type BrowserStorage = {
   runtime: { getURL(path: string): string };
   tabs?: {

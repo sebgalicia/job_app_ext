@@ -27,8 +27,13 @@
     { "questions": ["Do you now or in the future require any immigration filing or visa sponsorship to maintain work authorization, including sponsorship by Workday, renewal or extension of an open work permit, permanent residency, etc.?", "Will you now or in the future need immigration filing or visa sponsorship to maintain work authorization?"], "type": "yesno", "answer": "", "sensitive": true },
     { "questions": ["Are you a current or former employee of the United States government?", "Have you ever been employed by the U.S. government?"], "type": "choice", "answer": "", "sensitive": true },
     { "questions": ["Are you a current citizen, national or resident of Iran, Cuba, North Korea, Syria, Crimea, Donetsk People's Republic, or Luhansk People's Republic?", "Are you a citizen or resident of a country or region listed under U.S. Export Control laws?"], "type": "choice", "answer": "", "sensitive": true },
+<<<<<<< HEAD
     { "questions": ["Are you related to a current {company} employee?", "Are you related to anyone currently employed by {company}?"], "type": "choice", "answer": "", "sensitive": true },
     { "questions": ["To the best of your knowledge, are you related to an employee of a customer, or a government official, who has direct business interactions with {company}?", "Are you related to a customer employee or government official who directly does business with {company}?"], "type": "choice", "answer": "", "sensitive": true },
+=======
+    { "questions": ["Are you related to a current Workday employee?", "Are you related to anyone currently employed by Workday?"], "type": "choice", "answer": "", "sensitive": true },
+    { "questions": ["To the best of your knowledge, are you related to an employee of a customer, or a government official, who has direct business interactions with Workday?", "Are you related to a customer employee or government official who directly does business with Workday?"], "type": "choice", "answer": "", "sensitive": true },
+>>>>>>> 2ecc2e7d9b96b1e25caa5c1c5d48d0b147d0d1b0
     { "questions": ["I acknowledge that I have read, understood and reviewed the above questions, and I have answered them truthfully and accurately. I understand that an employment offer is conditioned on the truth of my statements and may be rescinded or my employment terminated if information is inaccurate or misleading. Please enter yes if you acknowledge."], "type": "text", "answer": "", "sensitive": true },
     { "questions": ["Why do you want to work here?", "Why this company?"], "type": "text", "answer": "I am excited about the {role} opportunity at {company}." },
     { "questions": ["Preferred work location", "Which office location do you prefer?"], "type": "choice", "answer": "Boston" },

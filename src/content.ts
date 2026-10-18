@@ -102,8 +102,11 @@ async function autofillPageOnce(): Promise<void> {
     if (settings.autoAgreeTerms !== true) {
       document.removeEventListener('focusin', handleFocus);
       document.removeEventListener('input', refreshActiveCombobox);
+<<<<<<< HEAD
       document.removeEventListener('input', refreshClearedField);
       document.removeEventListener('change', refreshClearedField);
+=======
+>>>>>>> 2ecc2e7d9b96b1e25caa5c1c5d48d0b147d0d1b0
       document.removeEventListener('click', refreshActiveCombobox);
       document.removeEventListener('keyup', refreshActiveCombobox);
     }
