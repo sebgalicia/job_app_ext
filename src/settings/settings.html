@@ -58,6 +58,23 @@
         <ul id="validation-errors" class="errors" aria-label="Validation errors"></ul>
       </section>
 
+      <section id="work-history-section" class="settings-section" aria-labelledby="work-history-heading">
+        <div class="section-heading">
+          <h2 id="work-history-heading">Job history</h2>
+          <p>Import multiple past and current jobs separately from your personal answers.</p>
+        </div>
+        <p id="work-history-saved-state" class="saved-state">Checking saved job history...</p>
+        <label class="input-label" for="work-history-file">Job history JSON file</label>
+        <input id="work-history-file" type="file" accept="application/json,.json">
+        <p class="help-text sample-download">Use <a href="work-history-sample.json" download="job-autofill-work-history-sample.json">the sample job history file</a> as a starting point. Dates use YYYY-MM-DD.</p>
+        <div class="actions">
+          <button id="work-history-import" class="button button-primary" type="button">Validate and import jobs</button>
+          <button id="work-history-export" class="button button-secondary" type="button" disabled>Export job history</button>
+        </div>
+        <div id="work-history-status" class="status-message" role="status" aria-live="polite"></div>
+        <ul id="work-history-errors" class="errors" aria-label="Job history validation errors"></ul>
+      </section>
+
       <section id="matching-section" class="settings-section" aria-labelledby="matching-heading">
         <div class="section-heading">
           <h2 id="matching-heading">Matching confidence</h2>

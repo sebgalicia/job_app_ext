@@ -50,6 +50,11 @@ function groupMembers(field: HTMLElement): HTMLElement[] {
     return Array.from(scope.querySelectorAll<HTMLInputElement>(`input[type="${field.type}"]`))
       .filter((candidate) => candidate.name === field.name);
   }
+  const role = field.getAttribute('role');
+  if (role === 'radio' || role === 'checkbox') {
+    const group = field.closest<HTMLElement>('[role="radiogroup"], [role="group"]');
+    return group ? Array.from(group.querySelectorAll<HTMLElement>(`[role="${role}"]`)) : [field];
+  }
   return [field];
 }
 
@@ -127,6 +132,11 @@ export function describeFocusedField(
       const label = input.labels?.[0];
       return label?.textContent?.replace(/\s+/g, ' ').trim() || input.value;
     }).filter(Boolean);
+  } else if (field.getAttribute('role') === 'radio' || field.getAttribute('role') === 'checkbox') {
+    const labels = members.map((member) => (member.getAttribute('aria-label') || member.textContent || '').replace(/\s+/g, ' ').trim());
+    const allYesNo = labels.length === 2 && labels.every((label) => /^(?:yes|no|true|false)$/i.test(label));
+    fieldType = allYesNo || members.length === 1 ? 'yesno' : 'choice';
+    optionLabels = labels.filter(Boolean);
   }
 
   return {

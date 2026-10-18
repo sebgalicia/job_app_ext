@@ -29,16 +29,20 @@ export class GenericAdapter implements FormAdapter {
 
   questionParts(field: HTMLElement): string[] {
     const parts: string[] = [];
-    const isChoiceOption = field instanceof HTMLInputElement && ['radio', 'checkbox'].includes(field.type);
+    const role = field.getAttribute('role');
+    const isChoiceOption = (field instanceof HTMLInputElement && ['radio', 'checkbox'].includes(field.type))
+      || role === 'radio' || role === 'checkbox';
     if (!isChoiceOption) {
       const labels = field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement
         ? Array.from(field.labels ?? [])
         : [];
       for (const label of labels) addUnique(parts, textOf(label));
     }
-    addUnique(parts, field.getAttribute('aria-label'));
+    if (!isChoiceOption) addUnique(parts, field.getAttribute('aria-label'));
 
-    const labelledBy = field.getAttribute('aria-labelledby');
+    const group = isChoiceOption ? field.closest<HTMLElement>('[role="radiogroup"], [role="group"]') : null;
+    if (group) addUnique(parts, group.getAttribute('aria-label'));
+    const labelledBy = group?.getAttribute('aria-labelledby') || field.getAttribute('aria-labelledby');
     if (labelledBy) {
       for (const id of labelledBy.trim().split(/\s+/)) addUnique(parts, textOf(field.ownerDocument.getElementById(id)));
     }

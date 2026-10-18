@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Job Autofill work history",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobs"],
+  "properties": {
+    "_instructions": { "type": "string" },
+    "jobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["company", "title", "description", "startDate", "endDate"],
+        "properties": {
+          "company": { "type": "string" },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "startDate": { "type": "string", "pattern": "^(?:|\\d{4}-\\d{2}-\\d{2})$" },
+          "endDate": { "type": "string", "pattern": "^(?:|\\d{4}-\\d{2}-\\d{2})$" },
+          "current": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

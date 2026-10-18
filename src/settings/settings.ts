@@ -1,10 +1,12 @@
 import { defaultThresholds, validThresholds, type Thresholds } from '../matching/matcher';
 import { validateAnswers } from '../validation';
+import { validateWorkHistory } from '../work-history-validation';
 
 const storageKey = 'answers';
 const thresholdsKey = 'matchingThresholds';
 const autofillKey = 'autofillOnOpen';
 const autoAgreeKey = 'autoAgreeTerms';
+const workHistoryKey = 'workHistory';
 type BrowserStorage = {
   runtime: { getURL(path: string): string };
   tabs?: {
@@ -37,6 +39,12 @@ const autoAgreeTerms = document.querySelector<HTMLInputElement>('#auto-agree-ter
 const autoAgreeStatus = document.querySelector<HTMLParagraphElement>('#auto-agree-status')!;
 const settingsNavigation = [...document.querySelectorAll<HTMLAnchorElement>('.settings-nav a[href^="#"]')];
 const backButton = document.querySelector<HTMLButtonElement>('#settings-back')!;
+const workHistoryFile = document.querySelector<HTMLInputElement>('#work-history-file')!;
+const workHistoryImport = document.querySelector<HTMLButtonElement>('#work-history-import')!;
+const workHistoryExport = document.querySelector<HTMLButtonElement>('#work-history-export')!;
+const workHistoryStatus = document.querySelector<HTMLDivElement>('#work-history-status')!;
+const workHistoryErrors = document.querySelector<HTMLUListElement>('#work-history-errors')!;
+const workHistorySavedState = document.querySelector<HTMLParagraphElement>('#work-history-saved-state')!;
 
 backButton.addEventListener('click', () => {
   void (async () => {
@@ -124,6 +132,86 @@ async function refreshSavedState(): Promise<void> {
     exportButton.disabled = true;
   }
 }
+
+function showWorkHistoryStatus(message: string, isError = false): void {
+  workHistoryStatus.textContent = message;
+  workHistoryStatus.className = isError ? 'status-message error' : 'status-message success';
+}
+
+function showWorkHistoryErrors(errors: string[]): void {
+  workHistoryErrors.replaceChildren(...errors.map((message) => {
+    const item = document.createElement('li');
+    item.textContent = message;
+    return item;
+  }));
+}
+
+async function refreshWorkHistoryState(): Promise<void> {
+  try {
+    const stored = await browserApi.storage.local.get(workHistoryKey);
+    const jobs = (stored[workHistoryKey] as { jobs?: unknown[] } | undefined)?.jobs;
+    const count = Array.isArray(jobs) ? jobs.length : 0;
+    workHistorySavedState.textContent = count > 0
+      ? `${count} ${count === 1 ? 'job' : 'jobs'} saved on this device.`
+      : 'No job history is saved yet.';
+    workHistoryExport.disabled = count === 0;
+  } catch {
+    workHistorySavedState.textContent = 'Could not read saved job history.';
+    workHistoryExport.disabled = true;
+  }
+}
+
+workHistoryImport.addEventListener('click', async () => {
+  showWorkHistoryErrors([]);
+  const file = workHistoryFile.files?.[0];
+  if (!file) {
+    showWorkHistoryStatus('Choose a job history JSON file first.', true);
+    return;
+  }
+  let history: unknown;
+  try {
+    history = JSON.parse(await file.text());
+  } catch {
+    showWorkHistoryStatus('The selected file is not valid JSON.', true);
+    return;
+  }
+  const result = validateWorkHistory(history);
+  if (!result.valid) {
+    showWorkHistoryStatus('Import canceled. Fix the validation errors and try again.', true);
+    showWorkHistoryErrors(result.errors);
+    return;
+  }
+  try {
+    await browserApi.storage.local.set({ [workHistoryKey]: history });
+    showWorkHistoryStatus('Job history validated and saved on this device.');
+    workHistoryFile.value = '';
+    await refreshWorkHistoryState();
+  } catch {
+    showWorkHistoryStatus('Could not save job history to local storage.', true);
+  }
+});
+
+workHistoryExport.addEventListener('click', async () => {
+  try {
+    const stored = await browserApi.storage.local.get(workHistoryKey);
+    const history = stored[workHistoryKey];
+    if (history === undefined) {
+      showWorkHistoryStatus('There is no saved job history to export.', true);
+      await refreshWorkHistoryState();
+      return;
+    }
+    const blob = new Blob([JSON.stringify(history, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'job-history.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    showWorkHistoryStatus('Job history exported.');
+  } catch {
+    showWorkHistoryStatus('Could not export job history.', true);
+  }
+});
 
 async function loadThresholds(): Promise<void> {
   try {
@@ -243,6 +331,7 @@ exportButton.addEventListener('click', async () => {
 });
 
 void refreshSavedState();
+void refreshWorkHistoryState();
 void loadThresholds();
 void loadAutofillSetting();
 void loadAutoAgreeSetting();

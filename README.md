@@ -52,6 +52,8 @@ The sample also includes blank Workday screening prompts. Leave an answer blank 
 
 The sample now includes optional fields for middle/preferred name, pronouns, address line 2, current location, portfolio, school location, degree completion, major/minor, GPA and scale, school attendance dates, graduation year, current or most recent employer and title, employment dates and description, experience length, availability, notice period, preferred work location, skills, certifications, languages, references, and a professional summary. Blank fields are ignored. For education dates, use `schoolStartDate` and `schoolEndDate` in `YYYY-MM-DD` format, or use separate `schoolStartDateMonth`, `schoolStartDateYear`, `schoolEndDateMonth`, and `schoolEndDateYear` values when the form asks for separate dropdowns. The flat profile represents one primary education record and one current or most recent job; use `answers` for additional schools, past jobs, and employer-specific questions.
 
+For multiple work experience entries, use **Settings → Job history** to import the separate `work-history-sample.json` file. Add one entry per job with its employer, title, description, start date, and end date; dates use `YYYY-MM-DD` or an empty string. The history is stored locally and exported separately from your main answers file. The extension only fills a dropdown after it finds a matching value among the options currently offered, and it leaves similarly scoring historical entries blank when it cannot distinguish them.
+
 For a conflict-of-interest question, `facts.conflictOfInterest` can be `true` if you have a conflict or `false` if you do not. It is blank in the sample because that answer depends on your situation. Do not add personal or demographic answers unless you choose to provide them.
 
 If you choose a different filename inside the repository, add it to `.gitignore` before committing. Never commit a completed answers file or share it publicly; you do not need to send your personal answers to anyone to use the extension.
@@ -92,6 +94,7 @@ Company and role detection checks job-posting structured data, page metadata and
 | `scripts/` | Build, scoring CLI, and local fixture server |
 | `docs/` | Privacy, manual testing, roadmap, and archived project brief |
 | `template.json`, `answers.schema.json` | Starter answers file and its schema |
+| `work-history.template.json`, `work-history.schema.json` | Multi-job history import template and schema |
 
 ## For contributors
 

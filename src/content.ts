@@ -1,12 +1,13 @@
 import { chooseAdapter } from './adapters';
-import { choiceWidgetExpanded, describeFocusedField, isChoiceWidget } from './adapters/field';
+import { describeFocusedField, isChoiceWidget } from './adapters/field';
 import { autoAgreeTermsControl, autofillControl, detectPageContext, dismissActivePreview, saveDetectedPageContext, showChoicePreview, showTextPreview } from './preview/text-preview';
 
-const supportedControls = 'input, textarea, select';
+const supportedControls = 'input, textarea, select, [role="radio"], [role="checkbox"]';
 
 function isEligibleControl(target: EventTarget | null): target is HTMLElement {
   if (!(target instanceof HTMLElement)) return false;
   if (isChoiceWidget(target)) return true;
+  if (target.matches('[role="radio"], [role="checkbox"]')) return true;
   if (!target.matches(supportedControls)) return false;
   if (target instanceof HTMLInputElement) {
     return ['text', 'email', 'tel', 'url', 'search', 'number', 'date', 'radio', 'checkbox'].includes(target.type);
@@ -45,10 +46,7 @@ async function processFocusedControl(target: EventTarget | null): Promise<void> 
     document.dispatchEvent(new CustomEvent('job-autofill:question-detected', {
       detail: { ...descriptor, field: target },
     }));
-    const closedTextCombobox = isChoiceWidget(target)
-      && target instanceof HTMLInputElement
-      && !choiceWidgetExpanded(target);
-    if ((descriptor.fieldType === 'text' || closedTextCombobox)
+    if (descriptor.fieldType === 'text'
       && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
       await showTextPreview(target, descriptor);
     }
@@ -74,6 +72,19 @@ function refreshActiveCombobox(event: Event): void {
   if (target) requestAnimationFrame(() => void processFocusedControl(target));
 }
 
+function refreshClearedField(event: Event): void {
+  const target = event.target;
+  const isClearedTextField = (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
+    && target.value.trim() === '' && document.activeElement === target;
+  const isClearedSelect = target instanceof HTMLSelectElement
+    && target.selectedOptions.length > 0
+    && (target.selectedOptions[0].value === '' || /^(?:select|choose|please select)\b/i.test(target.selectedOptions[0].textContent?.trim() ?? ''))
+    && document.activeElement === target;
+  if (isClearedTextField || isClearedSelect) {
+    requestAnimationFrame(() => void processFocusedControl(target));
+  }
+}
+
 async function autofillPageOnce(): Promise<void> {
   if (!await onePassAutofillEnabled) return;
   pageAutomationStopped = true;
@@ -91,6 +102,8 @@ async function autofillPageOnce(): Promise<void> {
     if (settings.autoAgreeTerms !== true) {
       document.removeEventListener('focusin', handleFocus);
       document.removeEventListener('input', refreshActiveCombobox);
+      document.removeEventListener('input', refreshClearedField);
+      document.removeEventListener('change', refreshClearedField);
       document.removeEventListener('click', refreshActiveCombobox);
       document.removeEventListener('keyup', refreshActiveCombobox);
     }
@@ -107,6 +120,7 @@ async function scanVisibleFieldsOnce(includeRegularAutofill: boolean): Promise<v
     `${supportedControls}, [role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="true"], [data-automation-id="selectWidget"]`,
   ));
   const seenGroups = new Set<string>();
+  const seenCustomGroups = new Set<HTMLElement>();
   for (const control of controls) {
     if (!isEligibleControl(control) || !control.isConnected || control.matches(':disabled, [readonly]')
       || control.closest('[hidden], [aria-hidden="true"]') || control.getClientRects().length === 0) continue;
@@ -114,6 +128,13 @@ async function scanVisibleFieldsOnce(includeRegularAutofill: boolean): Promise<v
       const groupKey = `${control.type}:${control.form?.id ?? 'document'}:${control.name}`;
       if (seenGroups.has(groupKey)) continue;
       seenGroups.add(groupKey);
+    }
+    if (control.getAttribute('role') === 'radio' || control.getAttribute('role') === 'checkbox') {
+      const group = control.closest<HTMLElement>('[role="radiogroup"], [role="group"]');
+      if (group) {
+        if (seenCustomGroups.has(group)) continue;
+        seenCustomGroups.add(group);
+      }
     }
     const descriptor = describeFocusedField(control, adapter);
     if (!descriptor.question) continue;
@@ -149,6 +170,8 @@ if (!contentWorld[installationFlag]) {
   // With optional automation off, pages remain idle until a form field receives focus.
   document.addEventListener('focusin', handleFocus);
   document.addEventListener('input', refreshActiveCombobox);
+  document.addEventListener('input', refreshClearedField);
+  document.addEventListener('change', refreshClearedField);
   document.addEventListener('click', refreshActiveCombobox);
   document.addEventListener('keyup', refreshActiveCombobox);
   // Run one bounded pass after the initial page has had a moment to render its form.

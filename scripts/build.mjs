@@ -15,8 +15,8 @@ const entries = {
   settings: './src/settings/settings.ts',
 };
 
-async function compileAnswersSchema() {
-  const schemaPath = resolve(root, 'answers.schema.json');
+async function compileSchema(schemaFilename, validatorFilename) {
+  const schemaPath = resolve(root, schemaFilename);
   const schemaText = (await readFile(schemaPath, 'utf8')).replace(/^\uFEFF/, '');
   const schema = JSON.parse(schemaText);
   const ajv = new Ajv2020({ allErrors: true, strict: false, code: { source: true, esm: true } });
@@ -24,7 +24,7 @@ async function compileAnswersSchema() {
   const generated = standaloneCode(ajv, validate);
   const generatedDir = resolve(root, 'src/generated');
   await mkdir(generatedDir, { recursive: true });
-  await writeFile(resolve(generatedDir, 'answers-validator.js'), generated, 'utf8');
+  await writeFile(resolve(generatedDir, validatorFilename), generated, 'utf8');
 }
 
 async function copyStaticFiles() {
@@ -37,9 +37,11 @@ async function copyStaticFiles() {
   await cp(resolve(root, 'src/settings/settings.html'), resolve(out, 'settings.html'));
   await cp(resolve(root, 'src/styles'), resolve(out), { recursive: true });
   await cp(resolve(root, 'template.json'), resolve(out, 'answers-sample.json'));
+  await cp(resolve(root, 'work-history.template.json'), resolve(out, 'work-history-sample.json'));
 }
 
-await compileAnswersSchema();
+await compileSchema('answers.schema.json', 'answers-validator.js');
+await compileSchema('work-history.schema.json', 'work-history-validator.js');
 await copyStaticFiles();
 
 const options = {

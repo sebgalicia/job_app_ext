@@ -1,0 +1,21 @@
+{
+  "_instructions": "EXAMPLE ONLY. Replace the example values with your own jobs. Add one object per job. Dates use YYYY-MM-DD or an empty string. Set current to true only for a current job. Import this file in Settings > Job history. It stays in local browser storage.",
+  "jobs": [
+    {
+      "company": "Example Company",
+      "title": "Software Engineer",
+      "description": "Built and maintained web applications; collaborated with product and design teams.",
+      "startDate": "2022-06-01",
+      "endDate": "2024-08-31",
+      "current": false
+    },
+    {
+      "company": "Example Studio",
+      "title": "Engineering Intern",
+      "description": "Created internal tools and wrote automated tests.",
+      "startDate": "2021-05-15",
+      "endDate": "2021-08-15",
+      "current": false
+    }
+  ]
+}

@@ -2,6 +2,7 @@ node_modules/
 dist/
 web-ext-artifacts/
 src/generated/answers-validator.js
+src/generated/work-history-validator.js
 
 # Personal answers files (keep your real profile out of GitHub)
 /answers.json

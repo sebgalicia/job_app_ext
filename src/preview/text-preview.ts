@@ -10,6 +10,15 @@ type StoredAnswers = {
   facts?: Record<string, string | number | boolean | undefined>;
   answers?: Array<{ questions: string[]; type: 'text' | 'choice' | 'yesno'; answer: string | boolean; sensitive?: boolean }>;
 };
+type StoredJobHistory = {
+  company: string;
+  title: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  current?: boolean;
+};
+type StoredWorkHistoryFile = { jobs?: StoredJobHistory[] };
 
 type StorageBrowser = {
   storage: { local: {
@@ -22,6 +31,11 @@ type PreviewField = HTMLInputElement | HTMLTextAreaElement;
 type PreviewTarget = HTMLElement;
 type SelectChoice = ChoiceOption & { element: HTMLElement };
 type PageContext = { company?: string; role?: string };
+
+function savedWorkHistory(stored: Record<string, unknown>): StoredJobHistory[] {
+  const file = stored.workHistory as StoredWorkHistoryFile | undefined;
+  return Array.isArray(file?.jobs) ? file.jobs : [];
+}
 
 const profileQuestions: Record<string, string[]> = {
   firstName: ['first name', 'given name', 'your first name'],
@@ -52,18 +66,18 @@ const profileQuestions: Record<string, string[]> = {
   minor: ['minor', 'minor field of study'],
   gpa: ['gpa', 'grade point average', 'grade average', 'cumulative average'],
   gpaScale: ['gpa scale', 'grading scale', 'maximum gpa'],
-  schoolStartDate: ['school start date', 'education start date', 'first year attended', 'start date of attendance', 'school start month', 'school start year', 'education start month', 'education start year', 'attendance start month', 'attendance start year'],
-  schoolEndDate: ['school end date', 'education end date', 'last year attended', 'end date of attendance', 'school end month', 'school end year', 'education end month', 'education end year', 'attendance end month', 'attendance end year'],
-  schoolStartDateMonth: ['school start month', 'school start date month', 'education start month', 'attendance start month', 'start date month'],
-  schoolStartDateYear: ['school start year', 'school start date year', 'education start year', 'attendance start year', 'start date year', 'first year attended'],
-  schoolEndDateMonth: ['school end month', 'school end date month', 'education end month', 'attendance end month', 'end date month'],
-  schoolEndDateYear: ['school end year', 'school end date year', 'education end year', 'attendance end year', 'end date year', 'last year attended'],
+  schoolStartDate: ['school start date', 'education start date', 'first year attended', 'start date of attendance', 'school start month', 'school start year', 'education start month', 'education start year', 'attendance start month', 'attendance start year', 'education from date', 'school from date'],
+  schoolEndDate: ['school end date', 'education end date', 'last year attended', 'end date of attendance', 'school end month', 'school end year', 'education end month', 'education end year', 'attendance end month', 'attendance end year', 'education to date', 'school to date'],
+  schoolStartDateMonth: ['school start month', 'school start date month', 'education start month', 'attendance start month', 'start date month', 'education from month', 'school from month'],
+  schoolStartDateYear: ['school start year', 'school start date year', 'education start year', 'attendance start year', 'start date year', 'first year attended', 'education from year', 'school from year'],
+  schoolEndDateMonth: ['school end month', 'school end date month', 'education end month', 'attendance end month', 'end date month', 'education to month', 'school to month'],
+  schoolEndDateYear: ['school end year', 'school end date year', 'education end year', 'attendance end year', 'end date year', 'last year attended', 'education to year', 'school to year'],
   gradYear: ['graduation year', 'year of graduation', 'degree year'],
   currentCompany: ['current company', 'current employer', 'employer name', 'company name'],
   currentTitle: ['current title', 'current role', 'job title', 'position title', 'occupation'],
   yearsExperience: ['years of experience', 'years experience', 'total experience', 'relevant experience'],
-  employmentStartDate: ['employment start date', 'job start date', 'date started'],
-  employmentEndDate: ['employment end date', 'job end date', 'date ended'],
+  employmentStartDate: ['employment start date', 'job start date', 'date started', 'employment from date', 'job from date'],
+  employmentEndDate: ['employment end date', 'job end date', 'date ended', 'employment to date', 'job to date'],
   employmentDescription: ['job description', 'role description', 'responsibilities', 'work experience description'],
   availableStartDate: ['available start date', 'earliest start date', 'when can you start', 'availability date'],
   noticePeriod: ['notice period', 'required notice', 'length of notice'],
@@ -277,8 +291,37 @@ function profileCandidates(
   });
 }
 
-function makeCandidates(answers: StoredAnswers, context: PageContext = {}): { candidates: MatchCandidate[]; answerByKey: Map<string, string>; sensitiveByKey: Set<string> } {
+function workHistoryCandidates(history: StoredJobHistory[] = [], context: PageContext = {}): MatchCandidate[] {
+  return history.flatMap((job, index) => {
+    const roleLabel = job.current ? 'current job' : `previous job ${index + 1}`;
+    const values: Array<[keyof StoredJobHistory, string[]]> = [
+      ['company', job.current
+        ? ['current company', 'current employer', 'employer name', 'company name', 'organization name']
+        : ['previous employer', 'former employer', 'previous company', 'company worked for', 'employer name', 'company name']],
+      ['title', job.current
+        ? ['current job title', 'current position', 'current role', 'job title', 'position title']
+        : ['previous job title', 'former position', 'previous position', 'job title', 'position title']],
+      ['description', ['job description', 'role description', 'responsibilities', 'describe your duties', 'work experience description']],
+      ['startDate', ['employment start date', 'job start date', 'date started working', 'start date of employment', 'job start month', 'job start year']],
+      ['endDate', ['employment end date', 'job end date', 'date employment ended', 'end date of employment', 'job end month', 'job end year']],
+    ];
+    return values.flatMap(([field, labels]) => {
+      const answer = job[field];
+      if (typeof answer !== 'string' || !answer.trim()) return [];
+      const questions = labels.map((label) => `${label} ${roleLabel} ${job.company}`.trim())
+        .concat(labels);
+      return [{ key: `workHistory[${index}].${field}`, questions: questions.map((question) => resolveQuestionPlaceholders(question, context)) }];
+    });
+  });
+}
+
+function makeCandidates(
+  answers: StoredAnswers,
+  context: PageContext = {},
+  history: StoredJobHistory[] = [],
+): { candidates: MatchCandidate[]; answerByKey: Map<string, string>; sensitiveByKey: Set<string> } {
   const candidates = profileCandidates(answers.profile, answers.profileQuestions, context);
+  candidates.push(...workHistoryCandidates(history, context));
   const answerByKey = new Map<string, string>();
   const sensitiveByKey = new Set<string>();
   for (const [index, entry] of (answers.answers ?? []).entries()) {
@@ -295,6 +338,12 @@ function makeCandidates(answers: StoredAnswers, context: PageContext = {}): { ca
       answerByKey.set(`profile.${key}`, String(value));
     }
   }
+  for (const [index, job] of history.entries()) {
+    for (const field of ['company', 'title', 'description', 'startDate', 'endDate'] as const) {
+      const value = job[field];
+      if (value?.trim()) answerByKey.set(`workHistory[${index}].${field}`, value);
+    }
+  }
   return { candidates, answerByKey, sensitiveByKey };
 }
 
@@ -304,29 +353,107 @@ function profileTypeHint(field: DetectedField): string | undefined {
     ?? (field.inputType === 'email' ? 'email' : field.inputType === 'tel' ? 'phone' : undefined);
 }
 
-function datePartForQuestion(key: string, value: string, question: string): string {
-  if (!['schoolStartDate', 'schoolEndDate', 'employmentStartDate', 'employmentEndDate', 'availableStartDate'].includes(key)) return value;
+function questionForMatching(descriptor: DetectedField): string {
+  const primary = descriptor.question.trim();
+  // Some Workday subfields expose only "From", "To", "Month", or "Year" as
+  // their accessible label. Keep the full context only for these short labels.
+  const shortLabel = /^(?:from|to|month|year|start|end)$/i.test(primary);
+  const missingParts = descriptor.questionParts.filter((part) => part.trim().toLocaleLowerCase() !== primary.toLocaleLowerCase());
+  return shortLabel
+    ? [...missingParts, primary].join(' ')
+    : primary;
+}
+
+function datePartForQuestion(key: string, value: string, question: string, options?: ChoiceOption[]): string {
+  if (key === 'startDate') key = 'employmentStartDate';
+  if (key === 'endDate') key = 'employmentEndDate';
   const asksMonth = /\bmonth\b/i.test(question);
   const asksYear = /\byear\b/i.test(question);
-  if (!asksMonth && !asksYear) return value;
+  const isDateProfileKey = ['schoolStartDate', 'schoolEndDate', 'employmentStartDate', 'employmentEndDate', 'availableStartDate'].includes(key);
+  if (!isDateProfileKey && !asksMonth && !asksYear) return value;
+  let datePart: 'month' | 'year' | undefined = asksMonth ? 'month' : asksYear ? 'year' : undefined;
+  if (!datePart && options?.length) {
+    const monthCount = options.filter((option) => monthNumber(option.label) !== undefined || monthNumber(option.value ?? '') !== undefined).length;
+    const yearCount = options.filter((option) => /^\s*(?:19|20)\d{2}\s*$/.test(option.label) || /^\s*(?:19|20)\d{2}\s*$/.test(option.value ?? '')).length;
+    if (monthCount >= 3 && monthCount / options.length >= 0.6) datePart = 'month';
+    else if (yearCount >= 2 && yearCount / options.length >= 0.6) datePart = 'year';
+  }
+  if (!datePart) return value;
 
   // Dates in answers use ISO format. Split them when an application asks for
   // separate month and year dropdowns instead of one date field.
   const iso = value.match(/^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/);
   if (iso) {
-    if (asksYear) return iso[1];
+    if (datePart === 'year') return iso[1];
     const month = Number(iso[2]);
     return Number.isInteger(month) && month >= 1 && month <= 12
       ? new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2000, month - 1, 1)))
       : value;
   }
   const year = value.match(/\b(?:19|20)\d{2}\b/);
-  if (asksYear && year) return year[0];
-  if (asksMonth) {
+  if (datePart === 'year' && year) return year[0];
+  if (datePart === 'month') {
     const month = value.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/i);
     if (month) return month[0];
   }
   return value;
+}
+
+function dateKeyForCandidate(key: string): string {
+  if (key.startsWith('profile.')) return key.slice('profile.'.length);
+  const history = key.match(/^workHistory\[\d+\]\.(startDate|endDate)$/);
+  if (history?.[1] === 'startDate') return 'employmentStartDate';
+  if (history?.[1] === 'endDate') return 'employmentEndDate';
+  return key;
+}
+
+function monthNumber(value: string): number | undefined {
+  const normalized = value.trim().toLocaleLowerCase().replace(/[.,]/g, '');
+  const numeric = Number(normalized);
+  if (/^\d{1,2}$/.test(normalized) && numeric >= 1 && numeric <= 12) return numeric;
+  const names = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+  const index = names.findIndex((name) => name === normalized || name.slice(0, 3) === normalized);
+  return index >= 0 ? index + 1 : undefined;
+}
+
+function dateParts(value: string): { year?: string; month?: number } {
+  const iso = value.match(/\b((?:19|20)\d{2})-(\d{1,2})(?:-\d{1,2})?\b/);
+  if (iso) return { year: iso[1], month: Number(iso[2]) };
+  const year = value.match(/\b((?:19|20)\d{2})\b/)?.[1];
+  const month = monthNumber(value.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|0?[1-9]|1[0-2])\b/i)?.[0] ?? '');
+  return { year, month };
+}
+
+function dateQuestionPart(question: string): 'month' | 'year' | undefined {
+  const words = question.toLocaleLowerCase().match(/[a-z]+/g) ?? [];
+  const monthIndex = words.lastIndexOf('month');
+  const yearIndex = words.lastIndexOf('year');
+  if (monthIndex < 0 && yearIndex < 0) return undefined;
+  if (monthIndex > yearIndex) return 'month';
+  if (yearIndex > monthIndex) return 'year';
+  // Workday education fields sometimes label both controls "From" or "To".
+  // Use the control's own option list to disambiguate those paired controls.
+  return undefined;
+}
+
+function chooseDateDropdownOption<T extends ChoiceOption>(answer: string, options: T[], question = ''): T | undefined {
+  const parts = dateParts(answer);
+  if (!parts.year && !parts.month) return undefined;
+  const monthOptionCount = options.filter((option) => monthNumber(option.label) !== undefined
+    || monthNumber(option.value ?? '') !== undefined).length;
+  const yearOptionCount = options.filter((option) => /\b(?:19|20)\d{2}\b/.test(`${option.label} ${option.value ?? ''}`)).length;
+  const monthMatches = parts.month === undefined ? [] : options.filter((option) => monthNumber(option.label) === parts.month
+    || monthNumber(option.value ?? '') === parts.month);
+  const yearMatches = parts.year === undefined ? [] : options.filter((option) => option.label.match(/\b(?:19|20)\d{2}\b/)?.[0] === parts.year
+    || option.value?.match(/\b(?:19|20)\d{2}\b/)?.[0] === parts.year);
+  const optionLooksLikeMonth = monthOptionCount >= 3 && monthOptionCount / options.length >= 0.6;
+  const optionLooksLikeYear = yearOptionCount >= 2 && yearOptionCount / options.length >= 0.6;
+  const explicitPart = dateQuestionPart(question);
+  const matches = optionLooksLikeMonth || explicitPart === 'month'
+    ? monthMatches
+    : optionLooksLikeYear || explicitPart === 'year' ? yearMatches : [];
+  const unique = [...new Map(matches.map((option) => [option.value ?? option.label, option])).values()];
+  return unique.length === 1 ? unique[0] : undefined;
 }
 
 function nativeSetValue(field: PreviewField, value: string): void {
@@ -357,6 +484,12 @@ function setChoiceValue(target: HTMLElement, choice: SelectChoice): boolean {
     dispatchNativeChoiceChange(chosen);
     return true;
   }
+  if (target.getAttribute('role') === 'radio' || target.getAttribute('role') === 'checkbox') {
+    if (!choice.element.isConnected || choice.element.getAttribute('aria-disabled') === 'true') return false;
+    choice.element.click();
+    dispatchNativeChoiceChange(choice.element);
+    return true;
+  }
   return false;
 }
 
@@ -372,24 +505,26 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
       && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement);
     if (isText) {
       if (target.value.trim().length > 0 || (target instanceof HTMLInputElement && !previewableInputTypes.has(target.type))) return false;
-    const stored = await browserApi.storage.local.get(['answers', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
+    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
       if (!target.isConnected || target.value.length > 0) return false;
       const answers = stored.answers as StoredAnswers | undefined;
-      if (!answers) return false;
+      const history = savedWorkHistory(stored);
+      if (!answers && history.length === 0) return false;
       const thresholds = validThresholds(stored.matchingThresholds);
       const context = await previewContext(stored);
-      const { candidates, answerByKey } = makeCandidates(answers, context);
+      const { candidates, answerByKey } = makeCandidates(answers ?? {}, context, history);
       const hint = profileTypeHint(descriptor);
       const hintedKey = hint ? `profile.${hint}` : undefined;
       const candidatesWithHints = candidates.map((candidate) => ({
         ...candidate,
         questions: candidate.key === hintedKey ? [...candidate.questions, descriptor.question] : candidate.questions,
       }));
-      const match = matchQuestion(descriptor.question, candidatesWithHints, thresholds);
+      const match = matchQuestion(questionForMatching(descriptor), candidatesWithHints, thresholds);
       if (!match.bestKey || match.confidence === 'none') return false;
       const answer = answerByKey.get(match.bestKey);
       if (answer === undefined) return false;
-      const resolved = resolvePlaceholders(answer, context);
+      const dateValue = datePartForQuestion(dateKeyForCandidate(match.bestKey), answer, questionForMatching(descriptor));
+      const resolved = resolvePlaceholders(dateValue, context);
       if (resolved.missing.length > 0 || !resolved.text.trim() || !target.isConnected || target.value.length > 0) return false;
       nativeSetValue(target, resolved.text);
       reportMatchedField(target);
@@ -397,12 +532,13 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
     }
 
     if (hasRealChoice(target)) return false;
-      const stored = await browserApi.storage.local.get(['answers', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
+      const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
     if (!target.isConnected || hasRealChoice(target)) return false;
     const answers = stored.answers as StoredAnswers | undefined;
-    if (!answers) return false;
+    const history = savedWorkHistory(stored);
+    if (!answers && history.length === 0) return false;
     const context = await previewContext(stored);
-    const choice = getStoredChoice(descriptor.question, focusedChoices(target), answers, validThresholds(stored.matchingThresholds), context);
+    const choice = getStoredChoice(questionForMatching(descriptor), focusedChoices(target), answers ?? {}, validThresholds(stored.matchingThresholds), context, history);
     if (!choice || !setChoiceValue(target, choice.option)) return false;
     reportMatchedField(target);
     return true;
@@ -600,6 +736,17 @@ function focusedChoices(target: HTMLElement): SelectChoice[] {
       .filter((option) => !option.disabled && !isPlaceholderOption(option.label || option.textContent || '', option.value))
       .map((option) => ({ label: (option.label || option.textContent || '').trim(), value: option.value, element: option }));
   }
+  if (target.getAttribute('role') === 'radio' || target.getAttribute('role') === 'checkbox') {
+    const group = target.closest<HTMLElement>('[role="radiogroup"], [role="group"]');
+    const role = target.getAttribute('role');
+    const controls = group
+      ? Array.from(group.querySelectorAll<HTMLElement>(`[role="${role}"]`))
+      : [target];
+    return controls.map((element) => {
+      const label = (element.getAttribute('aria-label') || element.textContent || '').replace(/\s+/g, ' ').trim();
+      return { label, value: element.getAttribute('data-value') || label, element };
+    }).filter((option) => Boolean(option.label) && option.element.getAttribute('aria-disabled') !== 'true');
+  }
   if (!(target instanceof HTMLInputElement) || !['radio', 'checkbox'].includes(target.type)) return [];
   const type = target.type;
   const controls = target.name
@@ -624,6 +771,14 @@ function hasRealChoice(target: HTMLElement): boolean {
   if (target instanceof HTMLSelectElement) {
     const selected = target.selectedOptions[0];
     return Boolean(selected && !isPlaceholderOption(selected.label || selected.textContent || '', selected.value));
+  }
+  if (target.getAttribute('role') === 'radio' || target.getAttribute('role') === 'checkbox') {
+    const group = target.closest<HTMLElement>('[role="radiogroup"], [role="group"]');
+    const role = target.getAttribute('role');
+    const controls = group
+      ? Array.from(group.querySelectorAll<HTMLElement>(`[role="${role}"]`))
+      : [target];
+    return controls.some((control) => control.getAttribute('aria-checked') === 'true');
   }
   if (!(target instanceof HTMLInputElement) || !['radio', 'checkbox'].includes(target.type)) return false;
   const type = target.type;
@@ -661,6 +816,7 @@ function getStoredChoice(
   answers: StoredAnswers,
   thresholds: Thresholds,
   context: PageContext = {},
+  history: StoredJobHistory[] = [],
 ): { option: SelectChoice; confidence: 'high' | 'medium'; sensitive: boolean } | undefined {
   if (options.length === 0) return undefined;
   const storedMatch = matchStoredEntry(question, answers, ['choice', 'yesno'], thresholds, context);
@@ -683,20 +839,44 @@ function getStoredChoice(
     };
   }
 
-  const profileMatch = matchQuestion(question, profileCandidates(answers.profile, answers.profileQuestions, context), thresholds);
-  const profileValue = profileMatch.bestKey?.startsWith('profile.')
-    ? answers.profile?.[profileMatch.bestKey.slice('profile.'.length)]
-    : undefined;
+  const profileMatch = matchQuestion(question, [
+    ...profileCandidates(answers.profile, answers.profileQuestions, context),
+    ...workHistoryCandidates(history, context),
+  ], thresholds);
+  if (profileMatch.bestKey?.startsWith('workHistory[')
+    && profileMatch.secondKey?.startsWith('workHistory[')
+    && profileMatch.bestScore - profileMatch.secondScore < 0.08) return undefined;
+  const historyKey = profileMatch.bestKey?.match(/^workHistory\[(\d+)\]\.(company|title|description|startDate|endDate)$/);
+  const historyValue = historyKey ? history[Number(historyKey[1])]?.[historyKey[2] as keyof StoredJobHistory] : undefined;
+  const profileKey = profileMatch.bestKey?.startsWith('profile.') ? profileMatch.bestKey.slice('profile.'.length) : undefined;
+  const profileValue = profileKey ? answers.profile?.[profileKey] : historyValue;
   const useProfileValue = (typeof profileValue === 'string' || typeof profileValue === 'number')
     && profileMatch.confidence !== 'none'
     && profileMatch.bestScore > (storedMatch?.score ?? 0);
   const savedTextAnswer = typeof entry?.answer === 'string' ? entry.answer : undefined;
   if (!useProfileValue && (savedTextAnswer === undefined || !savedTextAnswer.trim())) return undefined;
+  const dateKey = profileKey
+    ?? (historyKey?.[2] === 'startDate' ? 'employmentStartDate' : historyKey?.[2] === 'endDate' ? 'employmentEndDate' : '');
   const selectedAnswer = useProfileValue
-    ? datePartForQuestion(profileMatch.bestKey!.slice('profile.'.length), String(profileValue), question)
+    ? datePartForQuestion(dateKey, String(profileValue), question, options)
     : savedTextAnswer!;
-  const selectedAlternates = useProfileValue
-    ? answers.profileAlternates?.[profileMatch.bestKey!.slice('profile.'.length)] ?? []
+  const dateOption = chooseDateDropdownOption(selectedAnswer, options, question);
+  if (dateOption) {
+    return {
+      option: dateOption,
+      confidence: useProfileValue ? profileMatch.confidence : storedMatch?.confidence ?? 'high',
+      sensitive: Boolean(entry?.sensitive),
+    };
+  }
+  const isDateAnswer = ['schoolStartDate', 'schoolEndDate', 'employmentStartDate', 'employmentEndDate', 'availableStartDate']
+    .includes(dateKey);
+  if (isDateAnswer && (dateParts(selectedAnswer).month !== undefined || dateParts(selectedAnswer).year !== undefined)) {
+    // If the offered choices do not clearly identify an exact month/year,
+    // leave the control blank instead of fuzzily putting a full date into it.
+    return undefined;
+  }
+  const selectedAlternates = useProfileValue && profileKey
+    ? answers.profileAlternates?.[profileKey] ?? []
     : [];
   const selectedOption = chooseSavedAnswerOption(
     selectedAnswer,
@@ -728,8 +908,10 @@ function installChoicePreview(
   const suggestion = document.createElement('span');
   suggestion.className = highlighted ? 'job-autofill-choice-hint is-highlighted' : 'job-autofill-choice-hint';
   suggestion.textContent = `Suggested: ${option.label}`;
-  let visualTarget: HTMLElement = isChoiceWidget(target) ? option.element : target;
-  if (target instanceof HTMLInputElement) visualTarget = target.labels?.[0] ?? target;
+  let visualTarget: HTMLElement = isChoiceWidget(target) || target.getAttribute('role') === 'radio' || target.getAttribute('role') === 'checkbox'
+    ? option.element
+    : target;
+  if (option.element instanceof HTMLInputElement) visualTarget = option.element.labels?.[0] ?? option.element;
   if (highlighted) visualTarget.classList.add('job-autofill-option-preview');
   (isChoiceWidget(target) ? target : visualTarget).insertAdjacentElement('afterend', suggestion);
 
@@ -752,6 +934,9 @@ function installChoicePreview(
       const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
       setter?.call(target, option.value ?? (option.element instanceof HTMLOptionElement ? option.element.value : ''));
       dispatchNativeChoiceChange(target);
+    } else if (target.getAttribute('role') === 'radio' || target.getAttribute('role') === 'checkbox') {
+      option.element.click();
+      dispatchNativeChoiceChange(option.element);
     } else {
       const chosen = option.element as unknown as HTMLInputElement;
       chosen.checked = true;
@@ -797,21 +982,22 @@ export async function showChoicePreview(
 ): Promise<void> {
   clearActivePreview();
   const isChoiceWidgetTarget = isChoiceWidget(target);
-  if (!isChoiceWidgetTarget && !(target instanceof HTMLSelectElement) && !(target instanceof HTMLInputElement)) return;
-  if (!isChoiceWidgetTarget && !(target instanceof HTMLSelectElement) && !['radio', 'checkbox'].includes((target as HTMLInputElement).type)) return;
+  const isCustomChoice = target.getAttribute('role') === 'radio' || target.getAttribute('role') === 'checkbox';
+  if (!isChoiceWidgetTarget && !isCustomChoice && !(target instanceof HTMLSelectElement) && !['radio', 'checkbox'].includes((target as HTMLInputElement).type)) return;
   if (isChoiceWidgetTarget && !choiceWidgetExpanded(target)) return;
   if (hasRealChoice(target)) return;
 
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    const stored = await browserApi.storage.local.get(['answers', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
+    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
     if (document.activeElement !== target && !target.contains(document.activeElement)) return;
     const answers = stored.answers as StoredAnswers | undefined;
-    if (!answers) return;
+    const history = savedWorkHistory(stored);
+    if (!answers && history.length === 0) return;
     const thresholds = validThresholds(stored.matchingThresholds);
     const options = focusedChoices(target);
     const context = await previewContext(stored);
-    const choice = getStoredChoice(descriptor.question, options, answers, thresholds, context);
+    const choice = getStoredChoice(questionForMatching(descriptor), options, answers ?? {}, thresholds, context, history);
     if (!choice) return;
     const highlighted = choice.confidence === 'medium' || choice.sensitive;
     installChoicePreview(target, choice.option, highlighted);
@@ -911,26 +1097,30 @@ export async function showTextPreview(
 
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    const stored = await browserApi.storage.local.get(['answers', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
+    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
     if (document.activeElement !== target) return;
     const answers = stored.answers as StoredAnswers | undefined;
-    if (!answers) return;
+    const history = savedWorkHistory(stored);
+    if (!answers && history.length === 0) return;
     const thresholds = validThresholds(stored.matchingThresholds);
 
     const context = await previewContext(stored);
-    const { candidates, answerByKey, sensitiveByKey } = makeCandidates(answers, context);
+    const { candidates, answerByKey, sensitiveByKey } = makeCandidates(answers ?? {}, context, history);
     const hint = profileTypeHint(descriptor);
     const hintedKey = hint ? `profile.${hint}` : undefined;
     const candidatesWithHints = candidates.map((candidate) => ({
       ...candidate,
       questions: candidate.key === hintedKey ? [...candidate.questions, descriptor.question] : candidate.questions,
     }));
-    const match = matchQuestion(descriptor.question, candidatesWithHints, thresholds);
+    const match = matchQuestion(questionForMatching(descriptor), candidatesWithHints, thresholds);
     if (!match.bestKey || match.confidence === 'none') return;
+    if (match.bestKey.startsWith('workHistory[') && match.secondKey?.startsWith('workHistory[')
+      && match.bestScore - match.secondScore < 0.08) return;
     const answer = answerByKey.get(match.bestKey);
     if (answer === undefined || !answer.trim()) return;
 
-    const resolved = resolvePlaceholders(answer, context);
+    const dateValue = datePartForQuestion(dateKeyForCandidate(match.bestKey), answer, questionForMatching(descriptor));
+    const resolved = resolvePlaceholders(dateValue, context);
     const highlighted = match.confidence === 'medium' || sensitiveByKey.has(match.bestKey) || resolved.missing.length > 0;
     installPreview(target, resolved.text, highlighted, resolved.missing.length > 0);
   } catch {
