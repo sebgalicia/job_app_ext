@@ -7,8 +7,6 @@ const thresholdsKey = 'matchingThresholds';
 const autofillKey = 'autofillOnOpen';
 const autoAgreeKey = 'autoAgreeTerms';
 const workHistoryKey = 'workHistory';
-const feedbackEnabledKey = 'learningFeedbackEnabled';
-const feedbackRecordsKey = 'suggestionFeedback';
 type BrowserStorage = {
   runtime: { getURL(path: string): string };
   tabs?: {
@@ -17,7 +15,7 @@ type BrowserStorage = {
   };
   storage: {
     local: {
-      get(key: string | string[]): Promise<Record<string, unknown>>;
+      get(key: string): Promise<Record<string, unknown>>;
       set(values: Record<string, unknown>): Promise<void>;
     };
   };
@@ -47,10 +45,6 @@ const workHistoryExport = document.querySelector<HTMLButtonElement>('#work-histo
 const workHistoryStatus = document.querySelector<HTMLDivElement>('#work-history-status')!;
 const workHistoryErrors = document.querySelector<HTMLUListElement>('#work-history-errors')!;
 const workHistorySavedState = document.querySelector<HTMLParagraphElement>('#work-history-saved-state')!;
-const feedbackEnabled = document.querySelector<HTMLInputElement>('#learning-feedback-enabled')!;
-const feedbackStatus = document.querySelector<HTMLParagraphElement>('#feedback-status')!;
-const feedbackExport = document.querySelector<HTMLButtonElement>('#feedback-export')!;
-const feedbackClear = document.querySelector<HTMLButtonElement>('#feedback-clear')!;
 
 backButton.addEventListener('click', () => {
   void (async () => {
@@ -280,69 +274,6 @@ async function loadAutoAgreeSetting(): Promise<void> {
   }
 }
 
-async function refreshFeedbackState(): Promise<void> {
-  try {
-    const stored = await browserApi.storage.local.get([feedbackEnabledKey, feedbackRecordsKey]);
-    feedbackEnabled.checked = stored[feedbackEnabledKey] === true;
-    const records = Array.isArray(stored[feedbackRecordsKey]) ? stored[feedbackRecordsKey] as unknown[] : [];
-    feedbackStatus.textContent = `${records.length} feedback ${records.length === 1 ? 'record' : 'records'} saved on this device. Similar feedback can adjust future suggestions while learning is on.`;
-    feedbackStatus.className = 'status-message';
-    feedbackExport.disabled = records.length === 0;
-    feedbackClear.disabled = records.length === 0;
-  } catch {
-    feedbackStatus.textContent = 'Could not read local learning feedback.';
-    feedbackStatus.className = 'status-message error';
-    feedbackExport.disabled = true;
-    feedbackClear.disabled = true;
-  }
-}
-
-feedbackEnabled.addEventListener('change', async () => {
-  try {
-    await browserApi.storage.local.set({ [feedbackEnabledKey]: feedbackEnabled.checked });
-    feedbackStatus.textContent = feedbackEnabled.checked
-      ? 'Learning is on. Keeping or changing a suggestion updates local feedback.'
-      : 'Feedback collection is off. Existing records remain until you clear or export them.';
-    feedbackStatus.className = 'status-message success';
-  } catch {
-    feedbackEnabled.checked = false;
-    feedbackStatus.textContent = 'Could not save the learning feedback setting.';
-    feedbackStatus.className = 'status-message error';
-  }
-});
-
-feedbackExport.addEventListener('click', async () => {
-  try {
-    const stored = await browserApi.storage.local.get(feedbackRecordsKey);
-    const records = Array.isArray(stored[feedbackRecordsKey]) ? stored[feedbackRecordsKey] : [];
-    if (records.length === 0) return;
-    const blob = new Blob([JSON.stringify({ version: 1, records }, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'job-autofill-feedback.json';
-    link.click();
-    URL.revokeObjectURL(url);
-    feedbackStatus.textContent = 'Feedback records exported.';
-    feedbackStatus.className = 'status-message success';
-  } catch {
-    feedbackStatus.textContent = 'Could not export feedback records.';
-    feedbackStatus.className = 'status-message error';
-  }
-});
-
-feedbackClear.addEventListener('click', async () => {
-  try {
-    await browserApi.storage.local.set({ [feedbackRecordsKey]: [] });
-    await refreshFeedbackState();
-    feedbackStatus.textContent = 'Learning feedback records were deleted from this device.';
-    feedbackStatus.className = 'status-message success';
-  } catch {
-    feedbackStatus.textContent = 'Could not delete feedback records.';
-    feedbackStatus.className = 'status-message error';
-  }
-});
-
 importButton.addEventListener('click', async () => {
   showErrors([]);
   const file = fileInput.files?.[0];
@@ -404,4 +335,3 @@ void refreshWorkHistoryState();
 void loadThresholds();
 void loadAutofillSetting();
 void loadAutoAgreeSetting();
-void refreshFeedbackState();

@@ -1,5 +1,5 @@
 import { chooseAdapter } from './adapters';
-import { describeFocusedField, isChoiceWidget } from './adapters/field';
+import { choiceWidgetExpanded, describeFocusedField, isChoiceWidget } from './adapters/field';
 import { autoAgreeTermsControl, autofillControl, detectPageContext, dismissActivePreview, saveDetectedPageContext, showChoicePreview, showTextPreview } from './preview/text-preview';
 
 const supportedControls = 'input, textarea, select, [role="radio"], [role="checkbox"]';
@@ -24,24 +24,23 @@ const previewBrowser = (globalThis as typeof globalThis & { browser: {
 } }).browser;
 
 let pageAutomationStopped = false;
-let onePassSiteAllowed = false;
+let siteAllowsAutofill = false;
 let nextStepScanTimer: number | undefined;
 const onePassAutofillEnabled = previewBrowser.storage.local.get('autofillOnOpen')
   .then((stored) => stored.autofillOnOpen === true)
   .catch(() => false);
 
 async function processFocusedControl(target: EventTarget | null): Promise<void> {
+  if (pageAutomationStopped || await onePassAutofillEnabled) return;
   if (!isEligibleControl(target)) return;
   try {
-    const stored = await previewBrowser.storage.local.get(['siteEnabled', 'autoAgreeTerms']);
+    const stored = await previewBrowser.storage.local.get('siteEnabled');
     const siteEnabled = stored.siteEnabled as Record<string, boolean> | undefined;
     if (siteEnabled?.[location.hostname] === false) return;
     void saveDetectedPageContext();
     const adapter = chooseAdapter(document);
     const descriptor = describeFocusedField(target, adapter);
     if (!descriptor.question) return;
-    if (stored.autoAgreeTerms === true) await autoAgreeTermsControl(target, descriptor);
-    if (pageAutomationStopped || await onePassAutofillEnabled) return;
 
     document.dispatchEvent(new CustomEvent('job-autofill:question-detected', {
       detail: { ...descriptor, field: target },
@@ -92,7 +91,7 @@ async function autofillPageOnce(): Promise<void> {
     const stored = await previewBrowser.storage.local.get('siteEnabled');
     const siteEnabled = stored.siteEnabled as Record<string, boolean> | undefined;
     if (siteEnabled?.[location.hostname] === false) return;
-    onePassSiteAllowed = true;
+    siteAllowsAutofill = true;
 
     await scanVisibleFieldsOnce(true);
   } catch {
@@ -102,8 +101,6 @@ async function autofillPageOnce(): Promise<void> {
     if (settings.autoAgreeTerms !== true) {
       document.removeEventListener('focusin', handleFocus);
       document.removeEventListener('input', refreshActiveCombobox);
-      document.removeEventListener('input', refreshClearedField);
-      document.removeEventListener('change', refreshClearedField);
       document.removeEventListener('click', refreshActiveCombobox);
       document.removeEventListener('keyup', refreshActiveCombobox);
     }
@@ -153,7 +150,7 @@ function handleStepAdvance(event: MouseEvent): void {
   if (nextStepScanTimer !== undefined) window.clearTimeout(nextStepScanTimer);
   nextStepScanTimer = window.setTimeout(() => {
     nextStepScanTimer = undefined;
-    void scanVisibleFieldsOnce(pageAutomationStopped && onePassSiteAllowed).catch(() => undefined);
+    void scanVisibleFieldsOnce(pageAutomationStopped && siteAllowsAutofill).catch(() => undefined);
   }, 500);
 }
 

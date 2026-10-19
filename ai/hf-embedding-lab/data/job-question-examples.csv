@@ -2,43 +2,130 @@ question,intent,split
 Are you legally authorized to work in the country for this role?,work_authorization,train
 Do you currently have the right to work here?,work_authorization,train
 Can you work in this country without restrictions?,work_authorization,train
+Are you permitted to work in the location where this job is based?,work_authorization,train
+Do you have authorization to work in the country of employment?,work_authorization,train
+Are you eligible to work here under current immigration rules?,work_authorization,train
+Can you legally accept employment in this country?,work_authorization,train
+Will you require visa sponsorship now or later?,visa_sponsorship,train
 Will you need visa sponsorship now or in the future?,visa_sponsorship,train
 Do you require immigration support to work for us?,visa_sponsorship,train
-Will you need the employer to sponsor your work authorization?,visa_sponsorship,train
+Will the employer need to sponsor your work authorization?,visa_sponsorship,train
+Do you need an employer-sponsored visa for this position?,visa_sponsorship,train
+Will you need immigration filing or sponsorship from our company?,visa_sponsorship,train
+Does your work authorization require company sponsorship?,visa_sponsorship,train
 Are you open to relocating for this position?,relocation,train
 Would you move to the job location if hired?,relocation,train
 Can you relocate for this opportunity?,relocation,train
+Are you willing to move closer to the office?,relocation,train
+Would you consider a relocation for this role?,relocation,train
+Are you able to relocate to the position's location?,relocation,train
+Could you move to the city where this job is based?,relocation,train
 When would you be available to start?,start_availability,train
 What is the earliest date you could begin work?,start_availability,train
 How soon could you start this role?,start_availability,train
+What date can you start if selected?,start_availability,train
+When could you join the company?,start_availability,train
+Please provide your earliest possible start date.,start_availability,train
+From what date would you be available for employment?,start_availability,train
 What was your cumulative GPA?,gpa,train
 Please provide your grade point average.,gpa,train
 What is your current academic GPA?,gpa,train
+What is your overall GPA in your program?,gpa,train
+Enter your GPA on a 4.0 scale.,gpa,train
+What grade point average did you earn in college?,gpa,train
+Please list your cumulative grade point average.,gpa,train
 What degree are you pursuing or have you completed?,degree,train
 Please select your highest level of education.,degree,train
 What is your educational qualification?,degree,train
+What is the highest degree you have earned?,degree,train
+Which degree program are you enrolled in?,degree,train
+Please indicate your completed or in-progress degree.,degree,train
+What academic credential will you hold for this role?,degree,train
 What school or university did you attend?,school,train
 Please enter the name of your college.,school,train
 Which university are you currently enrolled in?,school,train
+What is the name of the institution where you studied?,school,train
+Please provide your university or college name.,school,train
+Where did you complete your education?,school,train
+Which school are you attending for your degree?,school,train
 Do you have any conflict of interest to disclose?,conflict_of_interest,train
 Are there any potential conflicts that we should know about?,conflict_of_interest,train
 Please disclose any conflicts of interest.,conflict_of_interest,train
+Could any outside activity conflict with this job?,conflict_of_interest,train
+Do you have a personal or financial interest that may conflict with this role?,conflict_of_interest,train
+Are you aware of any conflicts related to this position?,conflict_of_interest,train
+Please identify any actual or potential conflict of interest.,conflict_of_interest,train
 Have you ever worked for this company before?,prior_employment,train
 Are you a current or former employee of the organization?,prior_employment,train
 Have you previously been employed here?,prior_employment,train
+Did you work for this employer in the past?,prior_employment,train
+Are you currently employed by or have you worked for us before?,prior_employment,train
+Have you held a position at this company previously?,prior_employment,train
+Were you ever on this organization's payroll?,prior_employment,train
 What is your desired annual salary?,salary_expectation,train
 What compensation are you seeking for this role?,salary_expectation,train
 Please state your expected pay range.,salary_expectation,train
+What are your salary expectations for this position?,salary_expectation,train
+What annual base pay would you require?,salary_expectation,train
+Please enter the compensation you are looking for.,salary_expectation,train
+What is your target salary for this opportunity?,salary_expectation,train
+How many years of relevant work experience do you have?,years_experience,train
+How long have you worked in a related field?,years_experience,train
+Please state your total professional experience in years.,years_experience,train
+How many years have you worked in this type of role?,years_experience,train
+What is your professional experience duration?,years_experience,train
+For how many years have you worked in the industry?,years_experience,train
+How much relevant experience have you gained so far?,years_experience,train
 What interests you about this position?,role_interest,train
 Why are you interested in joining our team?,role_interest,train
 What makes you want to work for this company?,role_interest,train
+Why did you apply for this opportunity?,role_interest,train
+What attracted you to this role?,role_interest,train
+Why would you like to join our organization?,role_interest,train
+What appeals to you about working here?,role_interest,train
+How much notice would you need to give your current employer?,notice_period,train
+What is your required notice period before starting?,notice_period,train
+How long would you need to give notice at your current job?,notice_period,train
+Please specify your notice period.,notice_period,train
+How much notice must you provide before leaving your role?,notice_period,train
+Would you need to give notice before joining us, and how long?,notice_period,train
+What notice do you need to provide to your employer?,notice_period,train
 Are you legally permitted to work in this country?,work_authorization,validation
+Do you have the legal right to work in this job's country?,work_authorization,validation
+Are you allowed to accept a job in this location?,work_authorization,validation
 Do you need a visa or other work sponsorship?,visa_sponsorship,validation
+Would you need us to sponsor a visa for you?,visa_sponsorship,validation
+Is employer sponsorship necessary for you to work here?,visa_sponsorship,validation
 Would you be willing to move for the job?,relocation,validation
+Could you move if this position required it?,relocation,validation
+Would you relocate to take this position?,relocation,validation
 What date are you able to start?,start_availability,validation
+How soon are you able to join if offered the role?,start_availability,validation
+When can you begin working with us?,start_availability,validation
 Please enter your GPA.,gpa,validation
+What is your grade point average overall?,gpa,validation
+How would you report your academic average?,gpa,validation
+Please select the degree you have earned or are working toward.,degree,validation
+What is your highest academic qualification?,degree,validation
+Which degree are you completing?,degree,validation
 What is the name of your school?,school,validation
+Please list the college or university you attended.,school,validation
+At which institution are you studying?,school,validation
 Do you have a conflict of interest?,conflict_of_interest,validation
+Is there anything that could create a conflict with this role?,conflict_of_interest,validation
+Please tell us about any potential conflicts.,conflict_of_interest,validation
 Did you work for this employer in the past?,prior_employment,validation
+Have you previously held employment with this company?,prior_employment,validation
+Were you ever an employee here?,prior_employment,validation
 What salary would you expect?,salary_expectation,validation
+What pay are you seeking for this job?,salary_expectation,validation
+Please share your expected annual compensation.,salary_expectation,validation
+How many years have you worked in a related position?,years_experience,validation
+Please enter your number of years of experience.,years_experience,validation
+How long is your relevant professional background?,years_experience,validation
 Why do you want this job?,role_interest,validation
+What drew you to apply to our company?,role_interest,validation
+Why are you interested in this opportunity with us?,role_interest,validation
+How long is your current employer's required notice?,notice_period,validation
+How much advance notice do you have to provide?,notice_period,validation
+What is the length of notice you must give before leaving?,notice_period,validation

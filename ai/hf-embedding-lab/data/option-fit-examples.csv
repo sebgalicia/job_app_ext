@@ -1,0 +1,86 @@
+case_id,question,saved_answer,option,expected_option,split
+school-gt-1,Which college did you attend?,Georgia Tech,Georgia Institute of Technology,Georgia Institute of Technology,train
+school-gt-1,Which college did you attend?,Georgia Tech,Other college,Georgia Institute of Technology,train
+school-gt-1,Which college did you attend?,Georgia Tech,Georgia State University,Georgia Institute of Technology,train
+school-gt-1,Which college did you attend?,Georgia Tech,Georgia Southern University,Georgia Institute of Technology,train
+school-gt-2,Select your university,Georgia Institute of Technology,Georgia Institute of Technology,Georgia Institute of Technology,train
+school-gt-2,Select your university,Georgia Institute of Technology,Other college,Georgia Institute of Technology,train
+school-none-1,Choose your school,Georgia Tech,Other college,,train
+school-none-1,Choose your school,Georgia Tech,University of Georgia,,train
+school-none-1,Choose your school,Georgia Tech,Clemson University,,train
+degree-bs-1,Select your degree,B.S. in Computer Science,Bachelor of Science in Computer Science,Bachelor of Science in Computer Science,train
+degree-bs-1,Select your degree,B.S. in Computer Science,"Master of Science, Computer Science",Bachelor of Science in Computer Science,train
+degree-bs-1,Select your degree,B.S. in Computer Science,Associate of Arts,Bachelor of Science in Computer Science,train
+degree-bs-2,Which degree did you complete?,B.S. Computer Science,Bachelor of Science,Bachelor of Science,train
+degree-bs-2,Which degree did you complete?,B.S. Computer Science,Bachelor of Arts,Bachelor of Science,train
+degree-bs-2,Which degree did you complete?,B.S. Computer Science,Master of Business Administration,Bachelor of Science,train
+degree-none-1,Choose your completed credential,Bachelor of Science,Master of Science,,train
+degree-none-1,Choose your completed credential,Bachelor of Science,High school diploma,,train
+degree-none-1,Choose your completed credential,Bachelor of Science,Doctor of Philosophy,,train
+work-mode-1,What is your preferred work arrangement?,Hybrid,Hybrid,Hybrid,train
+work-mode-1,What is your preferred work arrangement?,Hybrid,Remote,Hybrid,train
+work-mode-1,What is your preferred work arrangement?,Hybrid,On-site,Hybrid,train
+authorization-1,Are you authorized to work here?,Yes,Yes,Yes,train
+authorization-1,Are you authorized to work here?,Yes,No,Yes,train
+authorization-1,Are you authorized to work here?,Yes,Not applicable,Yes,train
+authorization-negated-train-1,Are you not legally authorized to work here?,I am legally authorized to work in this country,No,No,train
+authorization-negated-train-1,Are you not legally authorized to work here?,I am legally authorized to work in this country,Yes,No,train
+visa-negated-train-1,Will you need visa sponsorship?,I do not require employer visa sponsorship,No,No,train
+visa-negated-train-1,Will you need visa sponsorship?,I do not require employer visa sponsorship,Yes,No,train
+fallback-explicit-1,Select your work arrangement,Other,Other,Other,train
+fallback-explicit-1,Select your work arrangement,Other,Remote,Other,train
+experience-range-train-1,How many years of experience do you have?,5 years,0-2 years,3-5 years,train
+experience-range-train-1,How many years of experience do you have?,5 years,3-5 years,3-5 years,train
+experience-range-train-1,How many years of experience do you have?,5 years,6-10 years,3-5 years,train
+education-month-1,Select the month of your education end date,May 15 2027,January,May,train
+education-month-1,Select the month of your education end date,May 15 2027,May,May,train
+education-month-1,Select the month of your education end date,May 15 2027,December,May,train
+education-year-1,Select the year of your education end date,May 15 2027,2026,2027,train
+education-year-1,Select the year of your education end date,May 15 2027,2027,2027,train
+education-year-1,Select the year of your education end date,May 15 2027,2028,2027,train
+start-month-1,Which month can you start?,2027-05-15,04,05,train
+start-month-1,Which month can you start?,2027-05-15,05,05,train
+start-month-1,Which month can you start?,2027-05-15,06,05,train
+school-gt-val-1,Please choose your college,Georgia Tech,Georgia Institute of Technology,Georgia Institute of Technology,validation
+school-gt-val-1,Please choose your college,Georgia Tech,Other college,Georgia Institute of Technology,validation
+school-gt-val-1,Please choose your college,Georgia Tech,Georgia Southern University,Georgia Institute of Technology,validation
+school-none-val-1,Select the institution you attended,Georgia Tech,Other college,,validation
+school-none-val-1,Select the institution you attended,Georgia Tech,University of Georgia,,validation
+school-none-val-1,Select the institution you attended,Georgia Tech,Georgia Southern University,,validation
+degree-bs-val-1,What credential did you earn?,B.S. Computer Science,Bachelor of Science in Computer Science,Bachelor of Science in Computer Science,validation
+degree-bs-val-1,What credential did you earn?,B.S. Computer Science,Master of Science in Computer Science,Bachelor of Science in Computer Science,validation
+degree-none-val-1,Choose your highest completed degree,Bachelor of Science,Master of Science,,validation
+degree-none-val-1,Choose your highest completed degree,Bachelor of Science,Associate Degree,,validation
+work-mode-val-1,Select your work location preference,Hybrid,Hybrid,Hybrid,validation
+work-mode-val-1,Select your work location preference,Hybrid,Remote,Hybrid,validation
+authorization-val-1,Do you have permission to work in this country?,Yes,Yes,Yes,validation
+authorization-val-1,Do you have permission to work in this country?,Yes,No,Yes,validation
+education-month-val-1,What month did your studies end?,2027-05-15,April,May,validation
+education-month-val-1,What month did your studies end?,2027-05-15,May,May,validation
+education-month-val-1,What month did your studies end?,2027-05-15,June,May,validation
+education-year-val-1,What year did you finish your education?,May 2027,2026,2027,validation
+education-year-val-1,What year did you finish your education?,May 2027,2027,2027,validation
+education-year-val-1,What year did you finish your education?,May 2027,2028,2027,validation
+blank-school-val-1,Select your school,,Georgia Tech,,validation
+blank-school-val-1,Select your school,,Other college,,validation
+ambiguous-date-val-1,Select your end month,03/04/2027,March,,validation
+ambiguous-date-val-1,Select your end month,03/04/2027,April,,validation
+end-year-val-1,Select your education end year,2019 to 2023,2021,2023,validation
+end-year-val-1,Select your education end year,2019 to 2023,2023,2023,validation
+end-year-val-1,Select your education end year,2019 to 2023,2024,2023,validation
+unknown-month-val-1,Select your education end month,2027,May,,validation
+unknown-month-val-1,Select your education end month,2027,June,,validation
+experience-range-val-1,Enter your years in this field,7 years,0-2 years,6-10 years,validation
+experience-range-val-1,Enter your years in this field,7 years,3-5 years,6-10 years,validation
+experience-range-val-1,Enter your years in this field,7 years,6-10 years,6-10 years,validation
+experience-out-of-range-val-1,Enter your relevant experience,15 years,0-2 years,,validation
+experience-out-of-range-val-1,Enter your relevant experience,15 years,3-5 years,,validation
+experience-out-of-range-val-1,Enter your relevant experience,15 years,6-10 years,,validation
+experience-overlap-val-1,Enter your experience,5 years,0-5 years,,validation
+experience-overlap-val-1,Enter your experience,5 years,5-10 years,,validation
+authorization-negated-val-1,Do you lack permission to work in this country?,I am authorized to work in this country,Yes,No,validation
+authorization-negated-val-1,Do you lack permission to work in this country?,I am authorized to work in this country,No,No,validation
+visa-negated-val-1,Will you require visa sponsorship now or later?,I will not need employer sponsorship,Yes,No,validation
+visa-negated-val-1,Will you require visa sponsorship now or later?,I will not need employer sponsorship,No,No,validation
+ambiguous-date-range-val-1,Select the year for your start and end dates,2019 to 2023,2023,,validation
+ambiguous-date-range-val-1,Select the year for your start and end dates,2019 to 2023,2019,,validation

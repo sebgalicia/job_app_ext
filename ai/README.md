@@ -8,11 +8,11 @@ The extension's baseline is a local TypeScript question matcher. When the user e
 
 ## Hugging Face model experiment: setup added
 
-The isolated lab now fine-tunes [`sentence-transformers/all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) on labeled job-application question pairs. It uses a small synthetic dataset, compares the base model and the fine-tuned model on held-out phrasings, and saves model weights and metrics locally. The lab instructions are in [`hf-embedding-lab/README.md`](hf-embedding-lab/README.md).
+The isolated lab fine-tunes [`sentence-transformers/all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) on labeled job-application question pairs and answer-to-option compatibility pairs. It compares the base and fine-tuned model on held-out question phrasings and page-option cases, including abstention examples, and saves model weights and metrics locally. Type-aware date component and numeric range checks are evaluated separately from embedding similarity. The lab instructions are in [`hf-embedding-lab/README.md`](hf-embedding-lab/README.md).
 
 This is an experiment, not extension integration. The user installs training dependencies into an ignored Python virtual environment; first run downloads public model files. Fine-tuning runs on-device and does not upload questions. Fine-tuning itself does not shrink model files; ONNX export/quantization and browser integration are later steps, contingent on measured benefit.
 
-Do not add the model to the extension until it improves held-out question retrieval over the rules matcher and can preserve confidence gates, abstention, dropdown option validation, privacy, offline operation, Firefox compatibility, and an acceptable package/runtime footprint.
+Do not add the model to the extension until it improves held-out question retrieval and safe answer-option selection over the current system, and preserves confidence gates, blank-answer abstention, date/value type checks, privacy, offline operation, Firefox compatibility, and an acceptable package/runtime footprint.
 
 ## How you will learn the AI architecture
 
