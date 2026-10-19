@@ -1,9 +1,5 @@
 import { chooseAdapter } from './adapters';
-<<<<<<< HEAD
 import { describeFocusedField, isChoiceWidget } from './adapters/field';
-=======
-import { choiceWidgetExpanded, describeFocusedField, isChoiceWidget } from './adapters/field';
->>>>>>> 2ecc2e7d9b96b1e25caa5c1c5d48d0b147d0d1b0
 import { autoAgreeTermsControl, autofillControl, detectPageContext, dismissActivePreview, saveDetectedPageContext, showChoicePreview, showTextPreview } from './preview/text-preview';
 
 const supportedControls = 'input, textarea, select, [role="radio"], [role="checkbox"]';
@@ -106,14 +102,8 @@ async function autofillPageOnce(): Promise<void> {
     if (settings.autoAgreeTerms !== true) {
       document.removeEventListener('focusin', handleFocus);
       document.removeEventListener('input', refreshActiveCombobox);
-<<<<<<< HEAD
-<<<<<<< HEAD
       document.removeEventListener('input', refreshClearedField);
       document.removeEventListener('change', refreshClearedField);
-=======
->>>>>>> 2ecc2e7d9b96b1e25caa5c1c5d48d0b147d0d1b0
-=======
->>>>>>> 2ecc2e7d9b96b1e25caa5c1c5d48d0b147d0d1b0
       document.removeEventListener('click', refreshActiveCombobox);
       document.removeEventListener('keyup', refreshActiveCombobox);
     }

@@ -23,3 +23,30 @@ textarea[data-job-autofill-preview="highlighted"]::placeholder {
   text-decoration: underline dotted;
   text-underline-offset: 0.15em;
 }
+
+.job-autofill-feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-inline-start: 0.45rem;
+  color: #555;
+  font: 12px/1.4 system-ui, sans-serif;
+  text-decoration: none;
+}
+
+.job-autofill-feedback-button {
+  padding: 1px 5px;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  font: inherit;
+  cursor: pointer;
+}
+
+.job-autofill-feedback-button:hover,
+.job-autofill-feedback-button:focus-visible {
+  border-color: #555;
+  outline: 2px solid #777;
+  outline-offset: 1px;
+}

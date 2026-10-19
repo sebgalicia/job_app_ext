@@ -2,6 +2,7 @@ import { defaultThresholds, matchQuestion, scoreSimilarity, validThresholds, typ
 import { normalizeText } from '../matching/normalize';
 import { chooseFactOption, detectPolarity, type ChoiceOption } from '../matching/polarity';
 import { ariaComboboxOptions, choiceWidgetExpanded, isChoiceWidget, type DetectedField } from '../adapters/field';
+import { saveSuggestionFeedback } from '../feedback';
 
 type StoredAnswers = {
   profile?: Record<string, string | number | undefined>;
@@ -425,7 +426,7 @@ function dateParts(value: string): { year?: string; month?: number } {
 }
 
 function dateQuestionPart(question: string): 'month' | 'year' | undefined {
-  const words = question.toLocaleLowerCase().match(/[a-z]+/g) ?? [];
+  const words: string[] = question.toLocaleLowerCase().match(/[a-z]+/g) ?? [];
   const monthIndex = words.lastIndexOf('month');
   const yearIndex = words.lastIndexOf('year');
   if (monthIndex < 0 && yearIndex < 0) return undefined;
@@ -799,7 +800,7 @@ function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Arr
   }
   const match = matchQuestion(question, candidates, thresholds);
   return match.bestKey && match.confidence !== 'none'
-    ? { entry: entries.get(match.bestKey), confidence: match.confidence, score: match.bestScore, runnerUpScore: match.secondScore }
+    ? { key: match.bestKey, entry: entries.get(match.bestKey), confidence: match.confidence, score: match.bestScore, runnerUpScore: match.secondScore }
     : undefined;
 }
 
@@ -817,7 +818,7 @@ function getStoredChoice(
   thresholds: Thresholds,
   context: PageContext = {},
   history: StoredJobHistory[] = [],
-): { option: SelectChoice; confidence: 'high' | 'medium'; sensitive: boolean } | undefined {
+): { option: SelectChoice; confidence: 'high' | 'medium'; sensitive: boolean; answerKey?: string; score?: number } | undefined {
   if (options.length === 0) return undefined;
   const storedMatch = matchStoredEntry(question, answers, ['choice', 'yesno'], thresholds, context);
   const fact = factFor(question, answers);
@@ -836,6 +837,8 @@ function getStoredChoice(
       option,
       confidence: storedMatch?.confidence ?? 'high',
       sensitive: Boolean(entry?.sensitive || topicSensitive),
+      answerKey: storedMatch?.key,
+      score: storedMatch?.score,
     };
   }
 
@@ -864,8 +867,10 @@ function getStoredChoice(
   if (dateOption) {
     return {
       option: dateOption,
-      confidence: useProfileValue ? profileMatch.confidence : storedMatch?.confidence ?? 'high',
+      confidence: useProfileValue && profileMatch.confidence !== 'none' ? profileMatch.confidence : storedMatch?.confidence ?? 'high',
       sensitive: Boolean(entry?.sensitive),
+      answerKey: useProfileValue ? profileMatch.bestKey : storedMatch?.key,
+      score: useProfileValue ? profileMatch.bestScore : storedMatch?.score,
     };
   }
   const isDateAnswer = ['schoolStartDate', 'schoolEndDate', 'employmentStartDate', 'employmentEndDate', 'availableStartDate']
@@ -888,8 +893,10 @@ function getStoredChoice(
   if (!selectedOption) return undefined;
   return {
     option: selectedOption,
-    confidence: useProfileValue ? profileMatch.confidence : storedMatch?.confidence ?? 'high',
+    confidence: useProfileValue && profileMatch.confidence !== 'none' ? profileMatch.confidence : storedMatch?.confidence ?? 'high',
     sensitive: Boolean(entry?.sensitive || /salary|compensation|race|ethnic|gender|disability|demograph/i.test(`${question} ${entry?.questions.join(' ') ?? ''}`)),
+    answerKey: useProfileValue ? profileMatch.bestKey : storedMatch?.key,
+    score: useProfileValue ? profileMatch.bestScore : storedMatch?.score,
   };
 }
 
@@ -902,6 +909,7 @@ function installChoicePreview(
   target: HTMLElement,
   option: SelectChoice,
   highlighted: boolean,
+  feedback: { enabled: boolean; question: string; answerKey?: string; score?: number },
 ): void {
   clearActivePreview();
   if (hasRealChoice(target)) return;
@@ -925,6 +933,10 @@ function installChoicePreview(
   const cleanup = () => restore();
   const accept = () => {
     if (hasRealChoice(target)) return;
+    if (feedback.enabled) void saveSuggestionFeedback({
+      action: 'useful', question: feedback.question, answer: option.label,
+      answerKey: feedback.answerKey, fieldType: 'choice', score: feedback.score,
+    });
     restore();
     activePreview = undefined;
     if (isChoiceWidget(target)) {
@@ -943,7 +955,21 @@ function installChoicePreview(
       dispatchNativeChoiceChange(chosen);
     }
   };
-  const onBlur = () => {
+  if (feedback.enabled) {
+    appendFeedbackButtons(suggestion, () => accept(), () => {
+      void saveSuggestionFeedback({
+        action: 'wrong', question: feedback.question, answer: option.label,
+        answerKey: feedback.answerKey, fieldType: 'choice', score: feedback.score,
+      });
+      restore();
+      activePreview = undefined;
+    }, () => {
+      restore();
+      if (activePreview?.field === target) activePreview = undefined;
+    });
+  }
+  const onBlur = (event: FocusEvent) => {
+    if (event.relatedTarget instanceof Node && suggestion.contains(event.relatedTarget)) return;
     restore();
     if (activePreview?.field === target) activePreview = undefined;
   };
@@ -958,7 +984,13 @@ function installChoicePreview(
       restore();
       activePreview = undefined;
     } else if (event.key === 'Tab') {
-      if (!highlighted) accept();
+      const feedbackButton = feedback.enabled && !event.shiftKey
+        ? suggestion.querySelector<HTMLButtonElement>('.job-autofill-feedback-button')
+        : null;
+      if (feedbackButton) {
+        event.preventDefault();
+        feedbackButton.focus();
+      } else if (!highlighted) accept();
       else {
         restore();
         activePreview = undefined;
@@ -989,7 +1021,7 @@ export async function showChoicePreview(
 
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
+    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds', 'learningFeedbackEnabled']);
     if (document.activeElement !== target && !target.contains(document.activeElement)) return;
     const answers = stored.answers as StoredAnswers | undefined;
     const history = savedWorkHistory(stored);
@@ -1000,19 +1032,60 @@ export async function showChoicePreview(
     const choice = getStoredChoice(questionForMatching(descriptor), options, answers ?? {}, thresholds, context, history);
     if (!choice) return;
     const highlighted = choice.confidence === 'medium' || choice.sensitive;
-    installChoicePreview(target, choice.option, highlighted);
+    installChoicePreview(target, choice.option, highlighted, {
+      enabled: stored.learningFeedbackEnabled === true,
+      question: questionForMatching(descriptor),
+      answerKey: choice.answerKey,
+      score: choice.score,
+    });
   } catch {
     // A storage failure must never alter a choice or interrupt normal form entry.
   }
 }
 
-function installPreview(field: PreviewField, text: string, highlighted: boolean, blocked: boolean): void {
+function appendFeedbackButtons(parent: HTMLElement, onUseful: () => void, onWrong: () => void, onExit: () => void): void {
+  const controls = document.createElement('span');
+  controls.className = 'job-autofill-feedback';
+  controls.setAttribute('aria-label', 'Suggestion feedback');
+  const useful = document.createElement('button');
+  useful.type = 'button';
+  useful.className = 'job-autofill-feedback-button';
+  useful.textContent = 'Useful';
+  useful.setAttribute('aria-label', 'Accept this suggestion as useful');
+  const wrong = document.createElement('button');
+  wrong.type = 'button';
+  wrong.className = 'job-autofill-feedback-button';
+  wrong.textContent = 'Wrong';
+  wrong.setAttribute('aria-label', 'Mark this suggestion as wrong');
+  for (const button of [useful, wrong]) {
+    button.addEventListener('pointerdown', (event) => event.preventDefault());
+    button.addEventListener('click', (event) => event.stopPropagation());
+    button.addEventListener('blur', (event) => {
+      if (!(event.relatedTarget instanceof Node) || !controls.contains(event.relatedTarget)) {
+        window.setTimeout(onExit, 0);
+      }
+    });
+  }
+  useful.addEventListener('click', onUseful);
+  wrong.addEventListener('click', onWrong);
+  controls.append('  ', useful, ' ', wrong);
+  parent.append(controls);
+}
+
+function installPreview(
+  field: PreviewField,
+  text: string,
+  highlighted: boolean,
+  blocked: boolean,
+  feedback: { enabled: boolean; question: string; answerKey?: string; score?: number },
+): void {
   clearActivePreview();
   if (field.value.length > 0) return;
 
   const dateField = field instanceof HTMLInputElement && field.type === 'date';
   const originalPlaceholder = field.getAttribute('placeholder');
   let suggestion: HTMLSpanElement | undefined;
+  const feedbackControls = document.createElement('span');
   if (dateField) {
     suggestion = document.createElement('span');
     suggestion.className = highlighted ? 'job-autofill-suggestion-hint is-highlighted' : 'job-autofill-suggestion-hint';
@@ -1021,11 +1094,28 @@ function installPreview(field: PreviewField, text: string, highlighted: boolean,
   } else {
     field.setAttribute('placeholder', text);
     if (highlighted) field.dataset.jobAutofillPreview = 'highlighted';
+    if (feedback.enabled) {
+      appendFeedbackButtons(feedbackControls, () => accept(), () => {
+        void saveSuggestionFeedback({
+          action: 'wrong', question: feedback.question, answer: text,
+          answerKey: feedback.answerKey, fieldType: 'text', score: feedback.score,
+        });
+        restore();
+        activePreview = undefined;
+      }, () => {
+        restore();
+        if (activePreview?.field === field) activePreview = undefined;
+      });
+      field.insertAdjacentElement('afterend', feedbackControls);
+    }
   }
   let accepted = false;
+  let feedbackRecorded = false;
+  let correctionTimer: number | undefined;
   const restore = () => {
     if (dateField) suggestion?.remove();
     else {
+      if (feedback.enabled) feedbackControls.remove();
       if (originalPlaceholder === null) field.removeAttribute('placeholder');
       else field.setAttribute('placeholder', originalPlaceholder);
       if (highlighted) delete field.dataset.jobAutofillPreview;
@@ -1037,18 +1127,68 @@ function installPreview(field: PreviewField, text: string, highlighted: boolean,
   const cleanup = () => restore();
   const accept = () => {
     if (blocked || field.value.length > 0) return;
+    if (feedback.enabled) void saveSuggestionFeedback({
+      action: 'useful', question: feedback.question, answer: text,
+      answerKey: feedback.answerKey, fieldType: 'text', score: feedback.score,
+    });
     accepted = true;
     restore();
     activePreview = undefined;
     nativeSetValue(field, text);
   };
-  const onInput = () => {
+  const recordWrongSuggestion = (typedAnswer?: string) => {
+    if (!feedback.enabled || feedbackRecorded) return;
+    if (typedAnswer !== undefined && !typedAnswer.trim()) return;
+    feedbackRecorded = true;
+    void saveSuggestionFeedback({
+      action: 'wrong', question: feedback.question, answer: text,
+      typedAnswer: typedAnswer?.trim(), answerKey: feedback.answerKey,
+      fieldType: 'text', score: feedback.score,
+    });
+  };
+  const removeCorrectionListeners = () => {
+    field.removeEventListener('input', onCorrectionInput);
+    field.removeEventListener('blur', saveCorrection);
+  };
+  const saveCorrection = () => {
+    if (correctionTimer !== undefined) window.clearTimeout(correctionTimer);
+    correctionTimer = undefined;
+    recordWrongSuggestion(field.value);
+    removeCorrectionListeners();
+  };
+  const onCorrectionInput = (event: Event) => {
+    if (!event.isTrusted) return;
+    if (correctionTimer !== undefined) window.clearTimeout(correctionTimer);
+    correctionTimer = window.setTimeout(saveCorrection, 700);
+  };
+  if (dateField && feedback.enabled && suggestion) {
+    appendFeedbackButtons(suggestion, () => accept(), () => {
+      void saveSuggestionFeedback({
+        action: 'wrong', question: feedback.question, answer: text,
+        answerKey: feedback.answerKey, fieldType: 'text', score: feedback.score,
+      });
+      restore();
+      activePreview = undefined;
+    }, () => {
+      restore();
+      if (activePreview?.field === field) activePreview = undefined;
+    });
+  }
+  const onInput = (event: Event) => {
     if (!accepted && field.value.length > 0) {
+      if (event.isTrusted && feedback.enabled) {
+        field.addEventListener('input', onCorrectionInput);
+        field.addEventListener('blur', saveCorrection);
+        if (correctionTimer !== undefined) window.clearTimeout(correctionTimer);
+        correctionTimer = window.setTimeout(saveCorrection, 700);
+      }
       restore();
       activePreview = undefined;
     }
   };
-  const onBlur = () => {
+  const onBlur: EventListener = (rawEvent) => {
+    const event = rawEvent as FocusEvent;
+    if (event.relatedTarget instanceof Node && (suggestion ?? feedbackControls).contains(event.relatedTarget)) return;
     restore();
     if (activePreview?.field === field) activePreview = undefined;
   };
@@ -1061,7 +1201,13 @@ function installPreview(field: PreviewField, text: string, highlighted: boolean,
       return;
     }
     if (event.key === 'Tab') {
-      if (!highlighted && !blocked) accept();
+      const feedbackButton = feedback.enabled && !event.shiftKey
+        ? (suggestion ?? feedbackControls).querySelector<HTMLButtonElement>('.job-autofill-feedback-button')
+        : null;
+      if (feedbackButton) {
+        event.preventDefault();
+        feedbackButton.focus();
+      } else if (!highlighted && !blocked) accept();
       else {
         restore();
         activePreview = undefined;
@@ -1072,10 +1218,6 @@ function installPreview(field: PreviewField, text: string, highlighted: boolean,
       event.preventDefault();
       accept();
       return;
-    }
-    if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
-      restore();
-      activePreview = undefined;
     }
   };
 
@@ -1097,7 +1239,7 @@ export async function showTextPreview(
 
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
+    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds', 'learningFeedbackEnabled']);
     if (document.activeElement !== target) return;
     const answers = stored.answers as StoredAnswers | undefined;
     const history = savedWorkHistory(stored);
@@ -1122,7 +1264,12 @@ export async function showTextPreview(
     const dateValue = datePartForQuestion(dateKeyForCandidate(match.bestKey), answer, questionForMatching(descriptor));
     const resolved = resolvePlaceholders(dateValue, context);
     const highlighted = match.confidence === 'medium' || sensitiveByKey.has(match.bestKey) || resolved.missing.length > 0;
-    installPreview(target, resolved.text, highlighted, resolved.missing.length > 0);
+    installPreview(target, resolved.text, highlighted, resolved.missing.length > 0, {
+      enabled: stored.learningFeedbackEnabled === true,
+      question: questionForMatching(descriptor),
+      answerKey: match.bestKey,
+      score: match.bestScore,
+    });
   } catch {
     // A storage failure must never change the field or interrupt normal form entry.
   }

@@ -20,6 +20,10 @@
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 5h12M4 10h12M4 15h12M8 3.5v3M12 8.5v3M7 13.5v3"/></svg>
             <span>Matching confidence</span>
           </a>
+          <a href="#learning-section">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5a6 6 0 0 0-3.5 10.9c.7.5 1 1.1 1 1.8h5c0-.7.3-1.3 1-1.8A6 6 0 0 0 10 2.5ZM8 17h4M8.5 15.2h3"/></svg>
+            <span>Learning feedback</span>
+          </a>
           <p class="nav-group-title nav-group-spaced">Autofill</p>
           <a href="#autofill-section">
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11.3 2.5 5.5 10h4l-.8 7.5 5.8-8h-4z"/></svg>
@@ -91,6 +95,22 @@
           <p>A highlighted preview appears between Medium and High.</p>
         </div>
         <p id="matching-status" class="status-message" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="learning-section" class="settings-section" aria-labelledby="learning-heading">
+        <div class="section-heading">
+          <h2 id="learning-heading">Learning feedback</h2>
+          <p>Collect examples of suggestions you explicitly mark useful or wrong. For now, records are only saved for review and do not affect matching.</p>
+        </div>
+        <label class="switch-row" for="learning-feedback-enabled">
+          <span class="switch-copy"><strong>Contribute feedback on this device</strong><small>Off by default. Accepting is positive; typing over a text suggestion saves it as wrong along with your replacement. Ignoring or dismissing stays neutral.</small></span>
+          <input id="learning-feedback-enabled" type="checkbox">
+        </label>
+        <p id="feedback-status" class="status-message" role="status" aria-live="polite">Loading feedback settings...</p>
+        <div class="actions">
+          <button id="feedback-export" class="button button-secondary" type="button" disabled>Export feedback</button>
+          <button id="feedback-clear" class="button button-secondary" type="button" disabled>Delete feedback</button>
+        </div>
       </section>
 
       <section id="autofill-section" class="settings-section" aria-labelledby="autofill-heading">

@@ -93,6 +93,7 @@ Company and role detection checks job-posting structured data, page metadata and
 | `tests/` | Automated unit and integration tests |
 | `scripts/` | Build, scoring CLI, and local fixture server |
 | `docs/` | Privacy, manual testing, roadmap, and archived project brief |
+| `ai/` | AI architecture learning path and local feedback-learning plan; feedback collection is implemented, but matching does not learn from it yet |
 | `template.json`, `answers.schema.json` | Starter answers file and its schema |
 | `work-history.template.json`, `work-history.schema.json` | Multi-job history import template and schema |
 
