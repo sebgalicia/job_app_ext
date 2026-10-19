@@ -1,8 +1,8 @@
-import { defaultThresholds, matchQuestion, scoreSimilarity, validThresholds, type MatchCandidate, type Thresholds } from '../matching/matcher';
+import { defaultThresholds, matchQuestion, matchQuestionWithFeedback, scoreSimilarity, validThresholds, type MatchCandidate, type Thresholds } from '../matching/matcher';
 import { normalizeText } from '../matching/normalize';
 import { chooseFactOption, detectPolarity, type ChoiceOption } from '../matching/polarity';
 import { ariaComboboxOptions, choiceWidgetExpanded, isChoiceWidget, type DetectedField } from '../adapters/field';
-import { saveSuggestionFeedback } from '../feedback';
+import { calibrateFeedbackConfidence, feedbackPreferences, saveSuggestionFeedback } from '../feedback';
 
 type StoredAnswers = {
   profile?: Record<string, string | number | undefined>;
@@ -32,6 +32,20 @@ type PreviewField = HTMLInputElement | HTMLTextAreaElement;
 type PreviewTarget = HTMLElement;
 type SelectChoice = ChoiceOption & { element: HTMLElement };
 type PageContext = { company?: string; role?: string };
+
+function matchWithFeedback(
+  query: string,
+  candidates: MatchCandidate[],
+  thresholds: Thresholds,
+  records: unknown,
+  enabled: boolean,
+  fieldType: 'text' | 'choice' | 'yesno',
+) {
+  if (!enabled) return matchQuestion(query, candidates, thresholds);
+  const preferences = feedbackPreferences(query, fieldType, new Set(candidates.map(({ key }) => key)), records, thresholds);
+  const matched = matchQuestionWithFeedback(query, candidates, thresholds, preferences);
+  return calibrateFeedbackConfidence(matched, query, fieldType, records, thresholds);
+}
 
 function savedWorkHistory(stored: Record<string, unknown>): StoredJobHistory[] {
   const file = stored.workHistory as StoredWorkHistoryFile | undefined;
@@ -506,7 +520,7 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
       && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement);
     if (isText) {
       if (target.value.trim().length > 0 || (target instanceof HTMLInputElement && !previewableInputTypes.has(target.type))) return false;
-    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
+    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds', 'learningFeedbackEnabled', 'suggestionFeedback']);
       if (!target.isConnected || target.value.length > 0) return false;
       const answers = stored.answers as StoredAnswers | undefined;
       const history = savedWorkHistory(stored);
@@ -520,7 +534,7 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
         ...candidate,
         questions: candidate.key === hintedKey ? [...candidate.questions, descriptor.question] : candidate.questions,
       }));
-      const match = matchQuestion(questionForMatching(descriptor), candidatesWithHints, thresholds);
+      const match = matchWithFeedback(questionForMatching(descriptor), candidatesWithHints, thresholds, stored.suggestionFeedback, stored.learningFeedbackEnabled === true, 'text');
       if (!match.bestKey || match.confidence === 'none') return false;
       const answer = answerByKey.get(match.bestKey);
       if (answer === undefined) return false;
@@ -533,13 +547,13 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
     }
 
     if (hasRealChoice(target)) return false;
-      const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
+      const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds', 'learningFeedbackEnabled', 'suggestionFeedback']);
     if (!target.isConnected || hasRealChoice(target)) return false;
     const answers = stored.answers as StoredAnswers | undefined;
     const history = savedWorkHistory(stored);
     if (!answers && history.length === 0) return false;
     const context = await previewContext(stored);
-    const choice = getStoredChoice(questionForMatching(descriptor), focusedChoices(target), answers ?? {}, validThresholds(stored.matchingThresholds), context, history);
+    const choice = getStoredChoice(questionForMatching(descriptor), focusedChoices(target), answers ?? {}, validThresholds(stored.matchingThresholds), context, history, stored.suggestionFeedback, stored.learningFeedbackEnabled === true);
     if (!choice || !setChoiceValue(target, choice.option)) return false;
     reportMatchedField(target);
     return true;
@@ -759,6 +773,38 @@ function focusedChoices(target: HTMLElement): SelectChoice[] {
   }).filter((option) => Boolean(option.label));
 }
 
+function selectedChoiceValue(target: HTMLElement, choices: SelectChoice[]): string | undefined {
+  if (target instanceof HTMLSelectElement) {
+    const selected = target.selectedOptions[0];
+    if (!selected || isPlaceholderOption(selected.label || selected.textContent || '', selected.value)) return undefined;
+    return selected.label || selected.textContent?.trim() || selected.value;
+  }
+  const selectedOption = choices.find(({ element }) => element.getAttribute('aria-checked') === 'true'
+    || element.getAttribute('aria-selected') === 'true'
+    || (element instanceof HTMLInputElement && element.checked));
+  if (selectedOption) return selectedOption.label;
+
+  if (isChoiceWidget(target)) {
+    if (choiceWidgetExpanded(target)) return undefined;
+    const value = (target.getAttribute('aria-valuetext') || target.getAttribute('data-value')
+      || (target instanceof HTMLInputElement ? target.value : '')).trim();
+    if (value && !isPlaceholderOption(value, 'has-value')) {
+      return choices.find((choice) => choice.label === value || choice.value === value)?.label ?? value;
+    }
+    const label = (target.textContent || '').replace(/\s+/g, ' ').trim();
+    return label && !isPlaceholderOption(label, 'has-value') ? label : undefined;
+  }
+  return undefined;
+}
+
+function sameChoice(left: string, right: SelectChoice): boolean {
+  const normalize = (value: string) => normalizeText(value).join(' ');
+  const normalizedLeft = normalize(left);
+  return [right.label, right.value ?? ''].some((value) => value !== '' && (
+    normalizedLeft === normalize(value) || left.trim().toLocaleLowerCase() === value.trim().toLocaleLowerCase()
+  ));
+}
+
 function hasRealChoice(target: HTMLElement): boolean {
   if (isChoiceWidget(target)) {
     const explicitValue = (target.getAttribute('aria-valuetext') || target.getAttribute('data-value') || '').trim();
@@ -789,7 +835,7 @@ function hasRealChoice(target: HTMLElement): boolean {
   return controls.some((input) => input.checked);
 }
 
-function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Array<'choice' | 'yesno'>, thresholds: Thresholds, context: PageContext) {
+function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Array<'choice' | 'yesno'>, thresholds: Thresholds, context: PageContext, feedbackRecords: unknown, learningEnabled: boolean) {
   const candidates: MatchCandidate[] = [];
   const entries = new Map<string, NonNullable<StoredAnswers['answers']>[number]>();
   for (const [index, entry] of (answers.answers ?? []).entries()) {
@@ -798,7 +844,7 @@ function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Arr
     candidates.push({ key, questions: entry.questions.map((wording) => resolveQuestionPlaceholders(wording, context)) });
     entries.set(key, entry);
   }
-  const match = matchQuestion(question, candidates, thresholds);
+  const match = matchWithFeedback(question, candidates, thresholds, feedbackRecords, learningEnabled, 'choice');
   return match.bestKey && match.confidence !== 'none'
     ? { key: match.bestKey, entry: entries.get(match.bestKey), confidence: match.confidence, score: match.bestScore, runnerUpScore: match.secondScore }
     : undefined;
@@ -818,9 +864,11 @@ function getStoredChoice(
   thresholds: Thresholds,
   context: PageContext = {},
   history: StoredJobHistory[] = [],
+  feedbackRecords: unknown = [],
+  learningEnabled = false,
 ): { option: SelectChoice; confidence: 'high' | 'medium'; sensitive: boolean; answerKey?: string; score?: number } | undefined {
   if (options.length === 0) return undefined;
-  const storedMatch = matchStoredEntry(question, answers, ['choice', 'yesno'], thresholds, context);
+  const storedMatch = matchStoredEntry(question, answers, ['choice', 'yesno'], thresholds, context, feedbackRecords, learningEnabled);
   const fact = factFor(question, answers);
   const entry = storedMatch?.entry;
   const booleanAnswer = entry?.type === 'yesno' && typeof entry.answer === 'boolean'
@@ -842,10 +890,10 @@ function getStoredChoice(
     };
   }
 
-  const profileMatch = matchQuestion(question, [
+  const profileMatch = matchWithFeedback(question, [
     ...profileCandidates(answers.profile, answers.profileQuestions, context),
     ...workHistoryCandidates(history, context),
-  ], thresholds);
+  ], thresholds, feedbackRecords, learningEnabled, 'choice');
   if (profileMatch.bestKey?.startsWith('workHistory[')
     && profileMatch.secondKey?.startsWith('workHistory[')
     && profileMatch.bestScore - profileMatch.secondScore < 0.08) return undefined;
@@ -908,6 +956,7 @@ function dispatchNativeChoiceChange(element: HTMLElement): void {
 function installChoicePreview(
   target: HTMLElement,
   option: SelectChoice,
+  choices: SelectChoice[],
   highlighted: boolean,
   feedback: { enabled: boolean; question: string; answerKey?: string; score?: number },
 ): void {
@@ -928,7 +977,7 @@ function installChoicePreview(
     suggestion.remove();
     target.removeEventListener('keydown', onKeyDown, true);
     target.removeEventListener('blur', onBlur, true);
-    target.removeEventListener('change', onChange, true);
+    target.ownerDocument.removeEventListener('change', onChange, true);
   };
   const cleanup = () => restore();
   const accept = () => {
@@ -955,25 +1004,33 @@ function installChoicePreview(
       dispatchNativeChoiceChange(chosen);
     }
   };
-  if (feedback.enabled) {
-    appendFeedbackButtons(suggestion, () => accept(), () => {
-      void saveSuggestionFeedback({
-        action: 'wrong', question: feedback.question, answer: option.label,
-        answerKey: feedback.answerKey, fieldType: 'choice', score: feedback.score,
-      });
-      restore();
-      activePreview = undefined;
-    }, () => {
-      restore();
-      if (activePreview?.field === target) activePreview = undefined;
-    });
-  }
   const onBlur = (event: FocusEvent) => {
     if (event.relatedTarget instanceof Node && suggestion.contains(event.relatedTarget)) return;
     restore();
     if (activePreview?.field === target) activePreview = undefined;
   };
-  const onChange = () => {
+  const onChange: EventListener = (rawEvent) => {
+    const event = rawEvent as Event;
+    const changed = event.target;
+    const belongsToChoice = changed === target
+      || (changed instanceof Node && target.contains(changed))
+      || choices.some(({ element }) => element === changed || (changed instanceof Node && element.contains(changed)));
+    if (!belongsToChoice) return;
+    const changedOption = choices.find(({ element }) => element === changed
+      || (changed instanceof Node && element.contains(changed)));
+    const selected = changedOption?.label ?? selectedChoiceValue(target, choices);
+    if (feedback.enabled && selected) {
+      const useful = sameChoice(selected, option);
+      void saveSuggestionFeedback({
+        action: useful ? 'useful' : 'wrong',
+        question: feedback.question,
+        answer: option.label,
+        replacementAnswer: useful ? undefined : selected,
+        answerKey: feedback.answerKey,
+        fieldType: 'choice',
+        score: feedback.score,
+      });
+    }
     restore();
     activePreview = undefined;
   };
@@ -984,13 +1041,7 @@ function installChoicePreview(
       restore();
       activePreview = undefined;
     } else if (event.key === 'Tab') {
-      const feedbackButton = feedback.enabled && !event.shiftKey
-        ? suggestion.querySelector<HTMLButtonElement>('.job-autofill-feedback-button')
-        : null;
-      if (feedbackButton) {
-        event.preventDefault();
-        feedbackButton.focus();
-      } else if (!highlighted) accept();
+      if (!highlighted) accept();
       else {
         restore();
         activePreview = undefined;
@@ -1003,7 +1054,7 @@ function installChoicePreview(
 
   target.addEventListener('keydown', onKeyDown, true);
   target.addEventListener('blur', onBlur, true);
-  target.addEventListener('change', onChange, true);
+  target.ownerDocument.addEventListener('change', onChange, true);
   activePreview = { field: target, cleanup };
 }
 
@@ -1021,7 +1072,7 @@ export async function showChoicePreview(
 
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds', 'learningFeedbackEnabled']);
+    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds', 'learningFeedbackEnabled', 'suggestionFeedback']);
     if (document.activeElement !== target && !target.contains(document.activeElement)) return;
     const answers = stored.answers as StoredAnswers | undefined;
     const history = savedWorkHistory(stored);
@@ -1029,10 +1080,10 @@ export async function showChoicePreview(
     const thresholds = validThresholds(stored.matchingThresholds);
     const options = focusedChoices(target);
     const context = await previewContext(stored);
-    const choice = getStoredChoice(questionForMatching(descriptor), options, answers ?? {}, thresholds, context, history);
+    const choice = getStoredChoice(questionForMatching(descriptor), options, answers ?? {}, thresholds, context, history, stored.suggestionFeedback, stored.learningFeedbackEnabled === true);
     if (!choice) return;
     const highlighted = choice.confidence === 'medium' || choice.sensitive;
-    installChoicePreview(target, choice.option, highlighted, {
+    installChoicePreview(target, choice.option, options, highlighted, {
       enabled: stored.learningFeedbackEnabled === true,
       question: questionForMatching(descriptor),
       answerKey: choice.answerKey,
@@ -1041,35 +1092,6 @@ export async function showChoicePreview(
   } catch {
     // A storage failure must never alter a choice or interrupt normal form entry.
   }
-}
-
-function appendFeedbackButtons(parent: HTMLElement, onUseful: () => void, onWrong: () => void, onExit: () => void): void {
-  const controls = document.createElement('span');
-  controls.className = 'job-autofill-feedback';
-  controls.setAttribute('aria-label', 'Suggestion feedback');
-  const useful = document.createElement('button');
-  useful.type = 'button';
-  useful.className = 'job-autofill-feedback-button';
-  useful.textContent = 'Useful';
-  useful.setAttribute('aria-label', 'Accept this suggestion as useful');
-  const wrong = document.createElement('button');
-  wrong.type = 'button';
-  wrong.className = 'job-autofill-feedback-button';
-  wrong.textContent = 'Wrong';
-  wrong.setAttribute('aria-label', 'Mark this suggestion as wrong');
-  for (const button of [useful, wrong]) {
-    button.addEventListener('pointerdown', (event) => event.preventDefault());
-    button.addEventListener('click', (event) => event.stopPropagation());
-    button.addEventListener('blur', (event) => {
-      if (!(event.relatedTarget instanceof Node) || !controls.contains(event.relatedTarget)) {
-        window.setTimeout(onExit, 0);
-      }
-    });
-  }
-  useful.addEventListener('click', onUseful);
-  wrong.addEventListener('click', onWrong);
-  controls.append('  ', useful, ' ', wrong);
-  parent.append(controls);
 }
 
 function installPreview(
@@ -1085,7 +1107,6 @@ function installPreview(
   const dateField = field instanceof HTMLInputElement && field.type === 'date';
   const originalPlaceholder = field.getAttribute('placeholder');
   let suggestion: HTMLSpanElement | undefined;
-  const feedbackControls = document.createElement('span');
   if (dateField) {
     suggestion = document.createElement('span');
     suggestion.className = highlighted ? 'job-autofill-suggestion-hint is-highlighted' : 'job-autofill-suggestion-hint';
@@ -1094,20 +1115,6 @@ function installPreview(
   } else {
     field.setAttribute('placeholder', text);
     if (highlighted) field.dataset.jobAutofillPreview = 'highlighted';
-    if (feedback.enabled) {
-      appendFeedbackButtons(feedbackControls, () => accept(), () => {
-        void saveSuggestionFeedback({
-          action: 'wrong', question: feedback.question, answer: text,
-          answerKey: feedback.answerKey, fieldType: 'text', score: feedback.score,
-        });
-        restore();
-        activePreview = undefined;
-      }, () => {
-        restore();
-        if (activePreview?.field === field) activePreview = undefined;
-      });
-      field.insertAdjacentElement('afterend', feedbackControls);
-    }
   }
   let accepted = false;
   let feedbackRecorded = false;
@@ -1115,7 +1122,6 @@ function installPreview(
   const restore = () => {
     if (dateField) suggestion?.remove();
     else {
-      if (feedback.enabled) feedbackControls.remove();
       if (originalPlaceholder === null) field.removeAttribute('placeholder');
       else field.setAttribute('placeholder', originalPlaceholder);
       if (highlighted) delete field.dataset.jobAutofillPreview;
@@ -1140,9 +1146,14 @@ function installPreview(
     if (!feedback.enabled || feedbackRecorded) return;
     if (typedAnswer !== undefined && !typedAnswer.trim()) return;
     feedbackRecorded = true;
+    const sameAsSuggestion = typedAnswer !== undefined
+      && normalizeText(typedAnswer).join(' ') === normalizeText(text).join(' ');
     void saveSuggestionFeedback({
-      action: 'wrong', question: feedback.question, answer: text,
-      typedAnswer: typedAnswer?.trim(), answerKey: feedback.answerKey,
+      action: sameAsSuggestion || typedAnswer === undefined ? 'useful' : 'wrong',
+      question: feedback.question,
+      answer: text,
+      typedAnswer: sameAsSuggestion ? undefined : typedAnswer?.trim(),
+      answerKey: feedback.answerKey,
       fieldType: 'text', score: feedback.score,
     });
   };
@@ -1161,19 +1172,6 @@ function installPreview(
     if (correctionTimer !== undefined) window.clearTimeout(correctionTimer);
     correctionTimer = window.setTimeout(saveCorrection, 700);
   };
-  if (dateField && feedback.enabled && suggestion) {
-    appendFeedbackButtons(suggestion, () => accept(), () => {
-      void saveSuggestionFeedback({
-        action: 'wrong', question: feedback.question, answer: text,
-        answerKey: feedback.answerKey, fieldType: 'text', score: feedback.score,
-      });
-      restore();
-      activePreview = undefined;
-    }, () => {
-      restore();
-      if (activePreview?.field === field) activePreview = undefined;
-    });
-  }
   const onInput = (event: Event) => {
     if (!accepted && field.value.length > 0) {
       if (event.isTrusted && feedback.enabled) {
@@ -1187,8 +1185,6 @@ function installPreview(
     }
   };
   const onBlur: EventListener = (rawEvent) => {
-    const event = rawEvent as FocusEvent;
-    if (event.relatedTarget instanceof Node && (suggestion ?? feedbackControls).contains(event.relatedTarget)) return;
     restore();
     if (activePreview?.field === field) activePreview = undefined;
   };
@@ -1201,13 +1197,7 @@ function installPreview(
       return;
     }
     if (event.key === 'Tab') {
-      const feedbackButton = feedback.enabled && !event.shiftKey
-        ? (suggestion ?? feedbackControls).querySelector<HTMLButtonElement>('.job-autofill-feedback-button')
-        : null;
-      if (feedbackButton) {
-        event.preventDefault();
-        feedbackButton.focus();
-      } else if (!highlighted && !blocked) accept();
+      if (!highlighted && !blocked) accept();
       else {
         restore();
         activePreview = undefined;
@@ -1239,7 +1229,7 @@ export async function showTextPreview(
 
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds', 'learningFeedbackEnabled']);
+    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds', 'learningFeedbackEnabled', 'suggestionFeedback']);
     if (document.activeElement !== target) return;
     const answers = stored.answers as StoredAnswers | undefined;
     const history = savedWorkHistory(stored);
@@ -1254,7 +1244,7 @@ export async function showTextPreview(
       ...candidate,
       questions: candidate.key === hintedKey ? [...candidate.questions, descriptor.question] : candidate.questions,
     }));
-    const match = matchQuestion(questionForMatching(descriptor), candidatesWithHints, thresholds);
+    const match = matchWithFeedback(questionForMatching(descriptor), candidatesWithHints, thresholds, stored.suggestionFeedback, stored.learningFeedbackEnabled === true, 'text');
     if (!match.bestKey || match.confidence === 'none') return;
     if (match.bestKey.startsWith('workHistory[') && match.secondKey?.startsWith('workHistory[')
       && match.bestScore - match.secondScore < 0.08) return;

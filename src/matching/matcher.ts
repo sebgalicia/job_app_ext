@@ -8,9 +8,12 @@ export type MatchResult = {
   secondKey?: string;
   secondScore: number;
   confidence: Confidence;
+  /** Feedback-adjusted confidence score; bestScore remains the baseline lexical score. */
+  confidenceScore?: number;
 };
 
 export type Thresholds = { high: number; medium: number };
+export type FeedbackPreferences = { preferredKeys?: string[]; rejectedKeys?: string[] };
 export const defaultThresholds: Thresholds = { high: 0.72, medium: 0.5 };
 
 export function validThresholds(value: unknown): Thresholds {
@@ -97,13 +100,37 @@ export function matchQuestion(
   candidates: MatchCandidate[],
   thresholds: Thresholds = defaultThresholds,
 ): MatchResult {
+  return matchQuestionWithFeedback(query, candidates, thresholds);
+}
+
+/** Apply local feedback as a retrieval preference without changing lexical candidate scores. */
+export function matchQuestionWithFeedback(
+  query: string,
+  candidates: MatchCandidate[],
+  thresholds: Thresholds = defaultThresholds,
+  preferences: FeedbackPreferences = {},
+): MatchResult {
   const corpus = candidates.flatMap((candidate) => candidate.questions);
+  const rejected = new Set(preferences.rejectedKeys ?? []);
   const scores = candidates
+    .filter((candidate) => !rejected.has(candidate.key))
     .map((candidate) => ({
       key: candidate.key,
       score: Math.max(0, ...candidate.questions.map((wording) => scoreSimilarity(query, wording, corpus))),
-    }))
-    .sort((a, b) => b.score - a.score);
+    }));
+  scores.sort((a, b) => b.score - a.score);
+  const initialBest = scores[0];
+  if (initialBest) {
+    const preferred = new Set(preferences.preferredKeys ?? []);
+    const preferredInRange = scores
+      .filter((candidate) => preferred.has(candidate.key) && candidate.score >= initialBest.score - 0.08)
+      .sort((a, b) => (preferences.preferredKeys ?? []).indexOf(a.key) - (preferences.preferredKeys ?? []).indexOf(b.key)
+        || b.score - a.score)[0];
+    if (preferredInRange) {
+      scores.splice(scores.indexOf(preferredInRange), 1);
+      scores.unshift(preferredInRange);
+    }
+  }
   const best = scores[0];
   const second = scores[1];
   const bestScore = best?.score ?? 0;
