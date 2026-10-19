@@ -9,6 +9,7 @@
     "serve:fixtures": "node scripts/serve-fixtures.mjs",
     "test": "npm run build && vitest run",
     "score": "npm run build && tsx scripts/score.ts",
+    "compare:feedback": "tsx scripts/compare-feedback.ts",
     "lint:extension": "web-ext lint --source-dir dist --ignore-files '**/*.map'",
     "lint": "npm run build && npm run lint:extension"
   },

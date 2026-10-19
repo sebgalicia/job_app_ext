@@ -4,14 +4,14 @@ import { chooseFactOption, detectPolarity, type ChoiceOption } from '../matching
 import { ariaComboboxOptions, choiceWidgetExpanded, isChoiceWidget, type DetectedField } from '../adapters/field';
 import { calibrateFeedbackConfidence, feedbackPreferences, saveSuggestionFeedback } from '../feedback';
 
-type StoredAnswers = {
+export type StoredAnswers = {
   profile?: Record<string, string | number | undefined>;
   profileAlternates?: Record<string, string[] | undefined>;
   profileQuestions?: Record<string, string[] | undefined>;
   facts?: Record<string, string | number | boolean | undefined>;
   answers?: Array<{ questions: string[]; type: 'text' | 'choice' | 'yesno'; answer: string | boolean; sensitive?: boolean }>;
 };
-type StoredJobHistory = {
+export type StoredJobHistory = {
   company: string;
   title: string;
   description: string;
@@ -286,7 +286,7 @@ async function previewContext(stored: Record<string, unknown>): Promise<{ compan
   };
 }
 
-function profileCandidates(
+export function profileCandidates(
   profile: StoredAnswers['profile'],
   customQuestions?: StoredAnswers['profileQuestions'],
   context: PageContext = {},
@@ -306,7 +306,7 @@ function profileCandidates(
   });
 }
 
-function workHistoryCandidates(history: StoredJobHistory[] = [], context: PageContext = {}): MatchCandidate[] {
+export function workHistoryCandidates(history: StoredJobHistory[] = [], context: PageContext = {}): MatchCandidate[] {
   return history.flatMap((job, index) => {
     const roleLabel = job.current ? 'current job' : `previous job ${index + 1}`;
     const values: Array<[keyof StoredJobHistory, string[]]> = [
@@ -330,7 +330,7 @@ function workHistoryCandidates(history: StoredJobHistory[] = [], context: PageCo
   });
 }
 
-function makeCandidates(
+export function makeCandidates(
   answers: StoredAnswers,
   context: PageContext = {},
   history: StoredJobHistory[] = [],
@@ -349,7 +349,8 @@ function makeCandidates(
     }
   }
   for (const [key, value] of Object.entries(answers.profile ?? {})) {
-    if (profileQuestions[key] && (typeof value === 'string' || typeof value === 'number') && String(value).trim()) {
+    if ((profileQuestions[key] || answers.profileQuestions?.[key])
+      && (typeof value === 'string' || typeof value === 'number') && String(value).trim()) {
       answerByKey.set(`profile.${key}`, String(value));
     }
   }

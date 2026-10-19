@@ -1,33 +1,44 @@
 # AI learning lab
 
-This folder is the home for the project's AI architecture notes and small learning experiments. It is separate from the extension's production code.
+This folder holds isolated experiments for learning how question matching can improve. Experimental models stay separate from the Firefox extension until they are measured and reviewed.
 
-## Current status
+## Current system
 
-The extension currently uses a rules-based matcher. The first feedback-collection slice is implemented: when enabled, explicit suggestion acceptance and “Wrong” reports are stored locally for review. This collection does not yet adapt rankings or confidence, and it does not train or change neural-network weights.
+The extension's baseline is a local TypeScript question matcher. When the user enables **Learning feedback**, keeping or changing a suggestion adds an opt-in local example. Similar feedback can affect retrieval and a personalized confidence score. It does not train neural-network weights, generate answers, or send application content to a service.
 
-This first version does not use a Hugging Face model and does not need a Python virtual environment, model download, or additional runtime dependency. It uses the existing TypeScript code and local browser storage. We can later compare it with a small Hugging Face model as a separate experiment if evaluation shows a model would help.
+## Hugging Face model: yes, planned
 
-## How we will learn AI architecture
+The first HF experiment will use a small **sentence-embedding transformer** through Hugging Face Transformers.js and ONNX Runtime. The candidate is [`onnx-community/all-MiniLM-L6-v2-ONNX`](https://huggingface.co/onnx-community/all-MiniLM-L6-v2-ONNX), an English sentence-similarity model with a Q4F16 ONNX file listed at about 30 MB. Transformers.js supports feature extraction and quantized model loading in-browser. The model turns a question into a vector; the extension can compare that vector with saved question vectors and retrieve the saved answer. It will not write or invent an application answer.
 
-We will learn the architecture one small idea at a time, using this extension as the example:
+The first experiment will run locally and compare the existing matcher with the embedding model on the same labeled questions. It will measure correct matches, wrong matches, abstentions, download size, startup time, and warm inference time. If it helps, we can add it as a user-controlled option while keeping the rules-based matcher as fallback.
 
-1. **A matching pipeline:** follow a form question from the page, through question detection and scoring, to a preview and the user's decision.
-2. **Feedback and labels:** distinguish an accepted answer, an explicitly rejected answer, a user correction, and an unanswered suggestion. Only the first three provide evidence; silence is unknown.
-3. **Ranking and calibration:** learn how a similarity score differs from a probability, how positive/negative examples affect ranking, and how to keep confidence cautious when examples are scarce.
-4. **Evaluation:** compare the original matcher with the adapted matcher on labeled questions, measuring both accuracy and how often it chooses to answer.
-5. **Transformer architecture:** in a separate, optional study exercise, explore tokenization, embeddings, encoder layers, self-attention, and vector similarity. We can compare an embedding-based retriever with the current matcher without making it a production dependency.
-6. **Retrieval and RAG:** understand indexing, retrieval, reranking, and generation. The extension's first feedback feature is retrieval/adaptation only; it will not generate answers with an LLM.
-7. **Fine-tuning:** later, learn how positive and negative question pairs can train an embedding model offline, and compare that model against the simpler local adaptation approach.
+The model weights may be downloaded from Hugging Face once and cached locally; inference should run on the device. The question text must never be sent to Hugging Face or an inference API. Before adding it to the extension, the experiment will check Firefox extension worker behavior, WebAssembly requirements, caching, memory use, and the final packaged size. A browser-extension integration needs extra care because the official Transformers.js browser-extension tutorial is still marked as forthcoming.
 
-Each lesson will use plain-language explanations, a small diagram or concrete example, and a focused code or data exercise. We will work in reviewable steps so you can inspect, understand, and commit each change. I will explain new terms and the reason for each design choice as we go.
+### Why not install the model directly in the extension now?
+
+We should first complete the baseline-versus-feedback comparison and build a small isolated model experiment. That gives us a real accuracy and size comparison before adding a runtime dependency or making every extension user download model files. The model experiment uses public, synthetic questions first; a user's real feedback stays local.
+
+## How you will learn the AI architecture
+
+We will follow one question through each layer and keep every stage inspectable:
+
+1. **Question detection:** how page labels and controls become a question string.
+2. **Token matching:** normalization, overlap, character trigrams, and the current lexical score.
+3. **Feedback learning:** positive and negative examples, local retrieval preferences, and confidence calibration.
+4. **Evaluation:** compare correct suggestions, incorrect suggestions, and abstentions against fixed labels.
+5. **Embeddings:** tokenize a question, run transformer encoder layers, and turn its output into a vector.
+6. **Vector retrieval:** compare question vectors using cosine similarity, then retrieve an existing saved answer.
+7. **RAG and fine-tuning:** learn how retrieval differs from generation, and later test offline training with reviewed question pairs if useful.
+
+Each step will use plain-language examples, a small diagram or code exercise, and a reviewable commit.
 
 ## Folder map
 
-- [`feedback-learning/README.md`](feedback-learning/README.md) describes the proposed local feedback loop, safeguards, and implementation steps.
-- `src/feedback.ts` stores opt-in feedback records locally; Settings lets you enable collection, export the records, or delete them.
-- Future throwaway experiments can go in a clearly named subfolder here. They should stay separate from production code until they have been measured and reviewed.
+- [`feedback-learning/README.md`](feedback-learning/README.md): local feedback rules, privacy controls, and evaluation steps.
+- [`hf-embedding-lab/README.md`](hf-embedding-lab/README.md): selected HF model, local experiment setup, measurements, and learning exercises.
+- `src/feedback.ts`: local feedback collection, retrieval preferences, and confidence adjustment.
+- `scripts/compare-feedback.ts`: compare baseline and feedback-adapted matching with labeled questions and a local feedback export.
 
 ## Privacy rule
 
-Application questions and answers are personal. Any future feedback feature must be opt-in, remain on the device, provide a way to review and delete learned examples, and make no network requests with application content.
+Application questions, answers, and feedback remain on the device. No experiment may send them to a model host, analytics service, or server. Keep real profile and feedback files out of Git.

@@ -285,7 +285,7 @@ async function refreshFeedbackState(): Promise<void> {
     const stored = await browserApi.storage.local.get([feedbackEnabledKey, feedbackRecordsKey]);
     feedbackEnabled.checked = stored[feedbackEnabledKey] === true;
     const records = Array.isArray(stored[feedbackRecordsKey]) ? stored[feedbackRecordsKey] as unknown[] : [];
-    feedbackStatus.textContent = `${records.length} feedback ${records.length === 1 ? 'record' : 'records'} saved on this device. Feedback does not change matching yet.`;
+    feedbackStatus.textContent = `${records.length} feedback ${records.length === 1 ? 'record' : 'records'} saved on this device. Similar feedback can adjust future suggestions while learning is on.`;
     feedbackStatus.className = 'status-message';
     feedbackExport.disabled = records.length === 0;
     feedbackClear.disabled = records.length === 0;
@@ -301,7 +301,7 @@ feedbackEnabled.addEventListener('change', async () => {
   try {
     await browserApi.storage.local.set({ [feedbackEnabledKey]: feedbackEnabled.checked });
     feedbackStatus.textContent = feedbackEnabled.checked
-      ? 'Feedback collection is on. Only your explicit Useful or Wrong choices are saved.'
+      ? 'Learning is on. Keeping or changing a suggestion updates local feedback.'
       : 'Feedback collection is off. Existing records remain until you clear or export them.';
     feedbackStatus.className = 'status-message success';
   } catch {
