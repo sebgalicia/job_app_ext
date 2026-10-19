@@ -1,50 +1,79 @@
-# Hugging Face embedding experiment
+# Hugging Face job-question model lab
 
-## Goal
+This is an isolated, local fine-tuning experiment. It teaches a small sentence encoder to place differently worded questions with the same labeled intent closer together. It does **not** generate answers, decide whether an application answer is true, or fill forms.
 
-Compare a local Hugging Face question-embedding model with the extension's existing rules-based matcher. The model only ranks saved question/answer pairs; it does not generate answers or fill a form on its own.
+## Model choice
 
-## Candidate model
+- Training base: [`sentence-transformers/all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
+- Training library: Sentence Transformers, which downloads the base model from Hugging Face on its first run.
+- Training target: cosine similarity between question pairs with matching or different intent labels.
+- Runtime: CPU by default; no GPU is required.
+- Export candidate later: ONNX, then browser inference with Transformers.js if evaluation justifies it.
 
-- Model: [`onnx-community/all-MiniLM-L6-v2-ONNX`](https://huggingface.co/onnx-community/all-MiniLM-L6-v2-ONNX)
-- Task: English sentence embeddings / similarity
-- Runtime candidate: `@huggingface/transformers` with ONNX Runtime
-- Initial quantization: Q4F16, whose ONNX weight data is listed at about 30 MB on the model repository
-- License shown on the model page: Apache-2.0
+Fine-tuning adapts the model to this task; it does not make the model smaller. Model size reduction would be a separate quantization/export step, and the final downloaded package would also include tokenizer and runtime files. The extension will not download or run this model as part of this experiment.
 
-This is a candidate for an experiment, not a decision to bundle it into the extension. The actual download and extension package also include tokenizer files, runtime code, and WebAssembly support. We will measure the complete size rather than treating the weight file as the final size.
+## Try the experiment on Windows PowerShell
 
-## Locality and privacy
+From the repository root:
 
-Transformers.js can download model weights from Hugging Face and cache them in the browser. The experiment must download only public model files; question text and user answers are passed to local inference and never to a hosted inference API. After the first download, test that embeddings can be computed offline. If the extension integration needs remote weights, explain that download clearly and offer a way to disable/remove the model. The final extension should prefer packaged or locally cached model files.
-
-Do not use personal profile files in early experiments. Start with `examples/questions.csv` and fake answers. Keep any local Hugging Face cache, feedback export, and comparison output out of Git.
-
-## Experiment sequence
-
-1. Finish and review the rules-baseline versus feedback-adapted comparison.
-2. Create a standalone local Node.js experiment using Transformers.js; do not change production extension matching yet.
-3. Download the selected Q4F16 model from the HF Hub once and cache it locally.
-4. Embed the example question wordings and compare each new question vector with saved question vectors using cosine similarity.
-5. Keep option validation and confidence/abstention gates outside the model. A dropdown result must still correspond to a page option, and the model cannot create an answer.
-6. Compare model rankings with baseline rankings using the same labeled rows. Measure accuracy, wrong suggestions, abstentions, cold startup, warm latency, memory, and total download size.
-7. Only if it improves results, prototype browser-extension inference behind a setting. Keep the rules-based matcher as fallback and preserve the user's control over enabling the model.
-
-## What you will learn
-
-- Tokenization splits each question into model-readable pieces.
-- The transformer encoder uses self-attention to represent the question's context.
-- Pooling turns token representations into one sentence vector.
-- Cosine similarity compares two vectors to rank related questions.
-- Retrieval chooses a saved answer by its linked question; generation is not part of this experiment.
-- A labeled comparison shows whether embeddings actually improve this application task.
-
-## Current state
-
-Plan and candidate selected. The model runtime and weights have not been installed or added to the extension. The baseline/adaptation comparison command is:
-
-```sh
-npm run compare:feedback -- --answers answers.private.json --input my-labeled-questions.csv --feedback job-autofill-feedback.json --out feedback-comparison.csv --work-history work-history.private.json
+```powershell
+cd ai/hf-embedding-lab
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python train.py
 ```
 
-The feedback export and private answers file are local inputs. `my-labeled-questions.csv` needs `question` and `expected_key` columns; keys such as `answers[3]` and `profile.degree` must match the exact answers file passed to the command. Add `options` for dropdown rows. `--work-history` is optional. The command writes a CSV comparison to the requested local output path and does not send any input to a server. The existing `examples/questions.csv` uses labels from an older sample answers ordering, so check its keys before reusing it with a different answers file.
+If PowerShell blocks venv activation, run the environment's Python directly instead:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe train.py
+```
+
+On the first run, Hugging Face downloads the public base model into its normal local cache. Training and evaluation run locally. No question text or answers are uploaded. The experiment writes the fine-tuned model to `output/job-question-minilm/` and its base-versus-fine-tuned comparison to `runs/latest-report.json`.
+
+Both output folders, the virtual environment, and model caches are ignored by Git. Do not put personal answer/profile data into this experiment or push generated model files to GitHub.
+
+## Training data format
+
+Edit `data/job-question-examples.csv`:
+
+```csv
+question,intent,split
+Are you authorized to work here?,work_authorization,train
+Can you legally work in this country?,work_authorization,validation
+```
+
+- `intent` is a label for the kind of saved answer the question maps to, not the answer itself.
+- `split` is `train` or `validation`. Validation wordings must be held out from training so we can check generalization.
+- Each training intent needs at least two different phrasings; include several intents so the model has meaningful alternatives.
+- Use synthetic or reviewed question wordings only. Never use a user's private answers as training labels without their deliberate choice.
+
+The script creates balanced positive and negative sentence pairs from the `intent` labels and uses Sentence Transformers' `CoSENTLoss`. It compares nearest-question intent accuracy before and after fine-tuning on held-out wording. Review individual mistakes, not just the percentage.
+
+The included examples are deliberately small synthetic fixtures that prove the training and evaluation path works. They are **not** a reliable quality benchmark and should not be treated as evidence that the model is ready for real applications. Replace or expand them with a reviewed, diverse, labeled dataset before drawing conclusions.
+
+## How this fits the extension
+
+The model can eventually be one more question-ranking source. The extension must still:
+
+1. retrieve an answer the user already saved rather than invent an answer;
+2. keep dropdown option validation and the existing confidence/abstention rules outside the model;
+3. leave the current rules matcher available as fallback;
+4. run locally with a user-controlled setting and no hosted inference API;
+5. beat the current matcher on held-out application questions without too many risky false matches.
+
+Only after those checks should we export ONNX and measure browser startup, warm latency, memory, download size, Firefox compatibility, and offline behavior. Hugging Face's [Optimum ONNX export guide](https://huggingface.co/docs/optimum-onnx/onnx/usage_guides/export_a_model) documents exporting feature-extraction models; browser integration is a separate engineering step.
+
+## Learning path
+
+1. **Labels:** the `intent` column tells training which questions point to the same answer.
+2. **Pairs:** matching-intent questions become positive pairs; different-intent questions become negative pairs.
+3. **Fine-tuning:** CoSENT loss adjusts the encoder so positive pairs score more alike than negative pairs.
+4. **Retrieval:** for a new question, compare its vector against saved example-question vectors and pick the closest label.
+5. **Evaluation:** compare the unchanged base model with the fine-tuned model on unseen wording and inspect mistakes.
+6. **Export:** later turn the trained encoder into a compact local browser model and measure the real extension cost.
+
+See [`../README.md`](../README.md) for the broader AI learning plan and privacy rule.

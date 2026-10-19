@@ -1,0 +1,44 @@
+question,intent,split
+Are you legally authorized to work in the country for this role?,work_authorization,train
+Do you currently have the right to work here?,work_authorization,train
+Can you work in this country without restrictions?,work_authorization,train
+Will you need visa sponsorship now or in the future?,visa_sponsorship,train
+Do you require immigration support to work for us?,visa_sponsorship,train
+Will you need the employer to sponsor your work authorization?,visa_sponsorship,train
+Are you open to relocating for this position?,relocation,train
+Would you move to the job location if hired?,relocation,train
+Can you relocate for this opportunity?,relocation,train
+When would you be available to start?,start_availability,train
+What is the earliest date you could begin work?,start_availability,train
+How soon could you start this role?,start_availability,train
+What was your cumulative GPA?,gpa,train
+Please provide your grade point average.,gpa,train
+What is your current academic GPA?,gpa,train
+What degree are you pursuing or have you completed?,degree,train
+Please select your highest level of education.,degree,train
+What is your educational qualification?,degree,train
+What school or university did you attend?,school,train
+Please enter the name of your college.,school,train
+Which university are you currently enrolled in?,school,train
+Do you have any conflict of interest to disclose?,conflict_of_interest,train
+Are there any potential conflicts that we should know about?,conflict_of_interest,train
+Please disclose any conflicts of interest.,conflict_of_interest,train
+Have you ever worked for this company before?,prior_employment,train
+Are you a current or former employee of the organization?,prior_employment,train
+Have you previously been employed here?,prior_employment,train
+What is your desired annual salary?,salary_expectation,train
+What compensation are you seeking for this role?,salary_expectation,train
+Please state your expected pay range.,salary_expectation,train
+What interests you about this position?,role_interest,train
+Why are you interested in joining our team?,role_interest,train
+What makes you want to work for this company?,role_interest,train
+Are you legally permitted to work in this country?,work_authorization,validation
+Do you need a visa or other work sponsorship?,visa_sponsorship,validation
+Would you be willing to move for the job?,relocation,validation
+What date are you able to start?,start_availability,validation
+Please enter your GPA.,gpa,validation
+What is the name of your school?,school,validation
+Do you have a conflict of interest?,conflict_of_interest,validation
+Did you work for this employer in the past?,prior_employment,validation
+What salary would you expect?,salary_expectation,validation
+Why do you want this job?,role_interest,validation

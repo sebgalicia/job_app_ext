@@ -4,6 +4,13 @@ web-ext-artifacts/
 src/generated/answers-validator.js
 src/generated/work-history-validator.js
 
+# Local Hugging Face experiment artifacts (models, caches, and run outputs)
+ai/hf-embedding-lab/.venv/
+ai/hf-embedding-lab/.cache/
+ai/hf-embedding-lab/runs/
+ai/hf-embedding-lab/output/
+ai/hf-embedding-lab/exported/
+
 # Personal answers files (keep your real profile out of GitHub)
 /answers.json
 /answers.private.json

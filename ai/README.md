@@ -6,17 +6,13 @@ This folder holds isolated experiments for learning how question matching can im
 
 The extension's baseline is a local TypeScript question matcher. When the user enables **Learning feedback**, keeping or changing a suggestion adds an opt-in local example. Similar feedback can affect retrieval and a personalized confidence score. It does not train neural-network weights, generate answers, or send application content to a service.
 
-## Hugging Face model: yes, planned
+## Hugging Face model experiment: setup added
 
-The first HF experiment will use a small **sentence-embedding transformer** through Hugging Face Transformers.js and ONNX Runtime. The candidate is [`onnx-community/all-MiniLM-L6-v2-ONNX`](https://huggingface.co/onnx-community/all-MiniLM-L6-v2-ONNX), an English sentence-similarity model with a Q4F16 ONNX file listed at about 30 MB. Transformers.js supports feature extraction and quantized model loading in-browser. The model turns a question into a vector; the extension can compare that vector with saved question vectors and retrieve the saved answer. It will not write or invent an application answer.
+The isolated lab now fine-tunes [`sentence-transformers/all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) on labeled job-application question pairs. It uses a small synthetic dataset, compares the base model and the fine-tuned model on held-out phrasings, and saves model weights and metrics locally. The lab instructions are in [`hf-embedding-lab/README.md`](hf-embedding-lab/README.md).
 
-The first experiment will run locally and compare the existing matcher with the embedding model on the same labeled questions. It will measure correct matches, wrong matches, abstentions, download size, startup time, and warm inference time. If it helps, we can add it as a user-controlled option while keeping the rules-based matcher as fallback.
+This is an experiment, not extension integration. The user installs training dependencies into an ignored Python virtual environment; first run downloads public model files. Fine-tuning runs on-device and does not upload questions. Fine-tuning itself does not shrink model files; ONNX export/quantization and browser integration are later steps, contingent on measured benefit.
 
-The model weights may be downloaded from Hugging Face once and cached locally; inference should run on the device. The question text must never be sent to Hugging Face or an inference API. Before adding it to the extension, the experiment will check Firefox extension worker behavior, WebAssembly requirements, caching, memory use, and the final packaged size. A browser-extension integration needs extra care because the official Transformers.js browser-extension tutorial is still marked as forthcoming.
-
-### Why not install the model directly in the extension now?
-
-We should first complete the baseline-versus-feedback comparison and build a small isolated model experiment. That gives us a real accuracy and size comparison before adding a runtime dependency or making every extension user download model files. The model experiment uses public, synthetic questions first; a user's real feedback stays local.
+Do not add the model to the extension until it improves held-out question retrieval over the rules matcher and can preserve confidence gates, abstention, dropdown option validation, privacy, offline operation, Firefox compatibility, and an acceptable package/runtime footprint.
 
 ## How you will learn the AI architecture
 
@@ -28,7 +24,8 @@ We will follow one question through each layer and keep every stage inspectable:
 4. **Evaluation:** compare correct suggestions, incorrect suggestions, and abstentions against fixed labels.
 5. **Embeddings:** tokenize a question, run transformer encoder layers, and turn its output into a vector.
 6. **Vector retrieval:** compare question vectors using cosine similarity, then retrieve an existing saved answer.
-7. **RAG and fine-tuning:** learn how retrieval differs from generation, and later test offline training with reviewed question pairs if useful.
+7. **RAG and fine-tuning:** learn how retrieval differs from generation, then fine-tune the local encoder on reviewed question pairs in the HF lab.
+8. **Model evaluation and export:** inspect held-out mistakes, then explore ONNX export and quantization only if the fine-tuned model improves matching.
 
 Each step will use plain-language examples, a small diagram or code exercise, and a reviewable commit.
 
