@@ -11,3 +11,4 @@ src/generated/work-history-validator.js
 
 # Local AI experiment leftovers (experiments live on the AI-integration branch)
 ai/
+/results.csv

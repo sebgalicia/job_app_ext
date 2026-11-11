@@ -1,8 +1,8 @@
 const stopWords = new Set([
   'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'can', 'could', 'do', 'does', 'did',
   'for', 'from', 'have', 'has', 'how', 'i', 'if', 'in', 'into', 'is', 'it', 'may', 'of',
-  'on', 'or', 'our', 'please', 'the', 'this', 'to', 'we', 'what', 'when', 'where', 'which',
-  'who', 'why', 'will', 'would', 'you', 'your', 'currently', 'now', 'future', 'ever',
+  'on', 'or', 'our', 'please', 'the', 'this', 'to', 'us', 'we', 'what', 'when', 'where', 'which',
+  'who', 'will', 'would', 'you', 'your', 'currently', 'now', 'future', 'ever',
 ]);
 
 const synonymGroups: string[][] = [
@@ -12,7 +12,7 @@ const synonymGroups: string[][] = [
   ['sponsor', 'sponsorship', 'sponsored'],
   ['relocate', 'relocation', 'moving'],
   ['authorized', 'authorised', 'eligible', 'authorization', 'authorisation'],
-  ['united', 'states', 'usa', 'us'],
+  ['united', 'states', 'usa'],
 ];
 
 const canonical = new Map<string, string>();
@@ -31,7 +31,9 @@ function stem(token: string): string {
 
 /** Lowercase, remove punctuation and stopwords, lightly stem, and canonicalize synonyms. */
 export function normalizeText(text: string): string[] {
+  // Only the capitalized abbreviation means the country; lowercase "us" is a pronoun.
   const words = text
+    .replace(/\bU\.?S\.?(?:A\.?)?(?![\p{L}\p{N}])/gu, ' united states ')
     .toLocaleLowerCase('en-US')
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
@@ -40,6 +42,7 @@ export function normalizeText(text: string): string[] {
 
   return words
     .filter((word) => !stopWords.has(word))
-    .map((word) => (word === 'authorized' || word === 'authorised' ? word : stem(word)))
-    .map((word) => canonical.get(word) ?? word);
+    // Look synonyms up before stemming too: stemming turns "united" into "unit" and
+    // "moving" into "mov", which would otherwise never reach their synonym group.
+    .map((word) => canonical.get(word) ?? canonical.get(stem(word)) ?? stem(word));
 }

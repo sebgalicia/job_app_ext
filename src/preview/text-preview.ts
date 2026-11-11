@@ -1,6 +1,7 @@
 import { defaultThresholds, matchQuestion, scoreSimilarity, validThresholds, type MatchCandidate, type Thresholds } from '../matching/matcher';
 import { normalizeText } from '../matching/normalize';
-import { chooseFactOption, detectPolarity, type ChoiceOption } from '../matching/polarity';
+import { chooseFactOption, type ChoiceOption } from '../matching/polarity';
+import { resolveTopicFact } from '../matching/topics';
 import { ariaComboboxOptions, choiceWidgetExpanded, isChoiceWidget, type DetectedField } from '../adapters/field';
 
 export type StoredAnswers = {
@@ -794,6 +795,8 @@ function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Arr
   const entries = new Map<string, NonNullable<StoredAnswers['answers']>[number]>();
   for (const [index, entry] of (answers.answers ?? []).entries()) {
     if ((entry.type !== 'choice' && entry.type !== 'yesno') || !allowed.includes(entry.type)) continue;
+    // Blank entries are reminders to fill in later; they must not win a match and block a real answer.
+    if (typeof entry.answer === 'string' && !entry.answer.trim()) continue;
     const key = `answers[${index}]`;
     candidates.push({ key, questions: entry.questions.map((wording) => resolveQuestionPlaceholders(wording, context)) });
     entries.set(key, entry);
@@ -802,13 +805,6 @@ function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Arr
   return match.bestKey && match.confidence !== 'none'
     ? { key: match.bestKey, entry: entries.get(match.bestKey), confidence: match.confidence, score: match.bestScore, runnerUpScore: match.secondScore }
     : undefined;
-}
-
-function factFor(question: string, answers: StoredAnswers): { value: boolean; topic: string } | undefined {
-  const polarity = detectPolarity(question);
-  if (polarity.ambiguous || !polarity.topic) return undefined;
-  const value = answers.facts?.[polarity.topic];
-  return typeof value === 'boolean' ? { value, topic: polarity.topic } : undefined;
 }
 
 function getStoredChoice(
@@ -821,25 +817,28 @@ function getStoredChoice(
 ): { option: SelectChoice; confidence: 'high' | 'medium'; sensitive: boolean; answerKey?: string; score?: number } | undefined {
   if (options.length === 0) return undefined;
   const storedMatch = matchStoredEntry(question, answers, ['choice', 'yesno'], thresholds, context);
-  const fact = factFor(question, answers);
+  // Known yes/no topics (sponsorship, work authorization, relocation, age, conflicts)
+  // are answered by topic, which handles reworded and negated questions.
+  const topicFact = resolveTopicFact(question, answers);
   const entry = storedMatch?.entry;
-  const booleanAnswer = entry?.type === 'yesno' && typeof entry.answer === 'boolean'
-    ? entry.answer
-    : typeof entry?.answer === 'boolean' ? entry.answer : fact?.value;
+  const booleanAnswer = topicFact?.value ?? (typeof entry?.answer === 'boolean' ? entry.answer : undefined);
 
   if (booleanAnswer !== undefined) {
-    const picked = chooseFactOption(question, options, booleanAnswer);
+    const picked = topicFact
+      ? chooseFactOption(question, options, booleanAnswer)
+      : chooseYesNoOption(options, booleanAnswer);
     const option = options.find((candidate) => candidate.label === picked?.label && candidate.value === picked?.value);
-    if (!option) return undefined;
-    const detectedTopic = detectPolarity(question).topic;
-    const topicSensitive = Boolean(detectedTopic && ['needsSponsorship', 'authorizedToWork'].includes(detectedTopic));
-    return {
-      option,
-      confidence: storedMatch?.confidence ?? 'high',
-      sensitive: Boolean(entry?.sensitive || topicSensitive),
-      answerKey: storedMatch?.key,
-      score: storedMatch?.score,
-    };
+    if (option) {
+      const topicSensitive = Boolean(topicFact && ['needsSponsorship', 'authorizedToWork'].includes(topicFact.topic));
+      return {
+        option,
+        confidence: topicFact ? 'high' : storedMatch?.confidence ?? 'high',
+        sensitive: Boolean(entry?.sensitive || topicSensitive),
+        answerKey: topicFact?.source ?? storedMatch?.key,
+        score: storedMatch?.score,
+      };
+    }
+    if (typeof entry?.answer === 'boolean') return undefined;
   }
 
   const profileMatch = matchQuestion(question, [
@@ -898,6 +897,13 @@ function getStoredChoice(
     answerKey: useProfileValue ? profileMatch.bestKey : storedMatch?.key,
     score: useProfileValue ? profileMatch.bestScore : storedMatch?.score,
   };
+}
+
+/** Pick the single plain Yes or No option for a yes/no answer whose question has no known topic. */
+export function chooseYesNoOption<T extends ChoiceOption>(options: T[], value: boolean): T | undefined {
+  const pattern = value ? /^yes\b/i : /^no\b/i;
+  const matches = options.filter((option) => pattern.test(option.label.trim()));
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 function dispatchNativeChoiceChange(element: HTMLElement): void {

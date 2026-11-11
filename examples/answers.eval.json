@@ -1,0 +1,15 @@
+{
+  "profile": { "firstName": "Alex", "lastName": "Example" },
+  "facts": {
+    "needsSponsorship": false,
+    "authorizedToWork": true,
+    "willingToRelocate": true,
+    "over18": true
+  },
+  "answers": [
+    { "id": "whyWorkHere", "questions": ["Why do you want to work here?", "Why this company?"], "type": "text", "answer": "I am excited about the {role} opportunity at {company}." },
+    { "id": "preferredWorkLocation", "questions": ["Preferred work location", "Which office location do you prefer?"], "type": "choice", "answer": "Boston" },
+    { "id": "authorizedDuplicateBlank", "questions": ["Are you authorized to work in the country where this job is located?"], "type": "yesno", "answer": "" },
+    { "id": "formerEmployee", "questions": ["Have you previously worked for {company}?", "Are you a former employee?"], "type": "yesno", "answer": false }
+  ]
+}

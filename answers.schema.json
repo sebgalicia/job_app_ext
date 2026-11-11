@@ -62,7 +62,8 @@
     "facts": { "type": "object", "description": "Common yes/no facts, including conflictOfInterest (true means you have a conflict; false means you do not), plus optional salary or other answers.", "additionalProperties": { "type": ["string", "number", "boolean"] } },
     "answers": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["questions", "type", "answer"], "properties": {
       "questions": { "type": "array", "minItems": 1, "items": { "type": "string" } }, "type": { "enum": ["text", "choice", "yesno"] },
-      "answer": { "type": ["string", "boolean"] }, "sensitive": { "type": "boolean" }
+      "answer": { "type": ["string", "boolean"] }, "sensitive": { "type": "boolean" },
+      "id": { "type": "string", "minLength": 1, "description": "Optional stable name for this answer, used in scoring reports instead of its position." }
     } } }
   },
   "$defs": {
