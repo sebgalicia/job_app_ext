@@ -64,7 +64,7 @@ Keep personal answers private. Do not add your completed answers file to this re
 
 With automatic filling off, focus an empty field to see a suggestion. **Tab** accepts a normal suggestion. Medium-confidence and sensitive suggestions are highlighted and require **Enter**; **Tab** moves on without accepting them. Typing dismisses a text preview, and **Esc** dismisses it without filling. The extension does not overwrite a field that already has text or a real choice selected.
 
-The optional **Fill matching fields as each step opens, then wait** setting fills visible, empty fields with Medium confidence or above. It then waits for you to press Next or Continue before checking the newly opened step. Review the values before submitting; the extension never submits applications.
+The optional **Fill matching fields as each step opens, then wait** setting fills visible, empty fields that have a High-confidence match. Medium-confidence matches are never filled automatically; they still appear as highlighted previews when you focus the field. It then waits for you to press Next or Continue before checking the newly opened step. Review the values before submitting; the extension never submits applications.
 
 Settings also has a separate, off-by-default **Auto-select agreement and acknowledgment** option. When enabled, it selects a clearly affirmative response only for terms-of-service, privacy-policy, and explicit truthfulness acknowledgment prompts. It types `yes` only when that prompt specifically requests the word, fills explicit signature fields with the saved profile name, and fills associated signature dates with today's local date. It does not answer unrelated Yes/No questions or submit the form.
 
@@ -126,7 +126,9 @@ This section is for readers who want the implementation details. Matching lowerc
 
 The High and Medium thresholds default to `0.72` and `0.50`. High matches get a normal preview, Medium matches get a highlighted preview, and weaker matches produce no preview. Medium must remain below High.
 
-For choices, the extension first looks for a direct match between the saved answer and an offered option. A broader option can be suggested for a free-text answer only when the question match reaches `0.85` and leads the next-best question match by at least `0.08`; if multiple options fit equally well, it leaves the field unanswered. Yes/no facts use topic and negation rules to account for reversed questions. Ambiguous wording is not guessed.
+For choices, the extension first looks for a direct match between the saved answer and an offered option. A broader option can be suggested for a free-text answer only when the question match reaches `0.85` and leads the next-best question match by at least `0.08`; if multiple options fit equally well, it leaves the field unanswered. Yes/no questions about sponsorship, work authorization, relocation, age, and conflicts of interest are answered by topic rather than by wording: the extension uses `facts` first, then any filled yes/no answer whose own wording has the same topic, and accounts for negation on both sides ("Can you work without sponsorship?"). If saved answers disagree, or the wording mentions more than one topic, it leaves the question blank. Blank answers never take part in matching.
+
+Standard contact fields are identified from the page's markup before any wording is compared: `autocomplete` values and common input names or IDs (for example `first_name`, `urls[LinkedIn]`, or Workday's `legalNameSection_firstName`) map straight to the matching profile field. A `fullName` value is derived from `firstName` and `lastName` unless you set `profile.fullName` yourself.
 
 ### Inspect matching with the scoring CLI
 
@@ -136,7 +138,9 @@ Run the same matcher and polarity logic used by the extension against a CSV:
 npm run score -- --answers answers.json --input examples/questions.csv --out results.csv
 ```
 
-The input needs a `question` column. An optional `options` column contains choices separated by `|`. `expected_key` and `expected_value` let you label expected answers and choices; those columns are copied to the results. The output includes the best and runner-up answer keys and scores, confidence, detected yes/no topic, polarity flips, and chosen option. Unlabeled rows should be excluded from accuracy calculations.
+The input needs a `question` column. An optional `options` column contains choices separated by `|`. `expected_key` and `expected_value` let you label expected answers and choices; those columns are copied to the results. The output includes the best and runner-up answer keys and scores, confidence, detected yes/no topic, polarity flips, `resolved_key` (the fact or answer that decided the row), and the chosen option. Answers are named by their optional `id`, or by position (`answers[3]`) when they have none, so give answers you label an `id`. Use `facts.<topic>` to label a topic-routed question and `none` for a question that should get no answer. Rows without `expected_key` are not counted.
+
+`npm run eval` scores the sample questions against the fake [`examples/answers.eval.json`](examples/answers.eval.json) and prints correct, wrong, and abstained counts. Run it after changing matching rules.
 
 Use pandas to summarize labeled answer-key accuracy by topic:
 
