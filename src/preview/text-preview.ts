@@ -1,8 +1,7 @@
-import { defaultThresholds, matchQuestion, matchQuestionWithFeedback, scoreSimilarity, validThresholds, type MatchCandidate, type Thresholds } from '../matching/matcher';
+import { defaultThresholds, matchQuestion, scoreSimilarity, validThresholds, type MatchCandidate, type Thresholds } from '../matching/matcher';
 import { normalizeText } from '../matching/normalize';
 import { chooseFactOption, detectPolarity, type ChoiceOption } from '../matching/polarity';
 import { ariaComboboxOptions, choiceWidgetExpanded, isChoiceWidget, type DetectedField } from '../adapters/field';
-import { calibrateFeedbackConfidence, feedbackPreferences, saveSuggestionFeedback } from '../feedback';
 
 export type StoredAnswers = {
   profile?: Record<string, string | number | undefined>;
@@ -32,20 +31,6 @@ type PreviewField = HTMLInputElement | HTMLTextAreaElement;
 type PreviewTarget = HTMLElement;
 type SelectChoice = ChoiceOption & { element: HTMLElement };
 type PageContext = { company?: string; role?: string };
-
-function matchWithFeedback(
-  query: string,
-  candidates: MatchCandidate[],
-  thresholds: Thresholds,
-  records: unknown,
-  enabled: boolean,
-  fieldType: 'text' | 'choice' | 'yesno',
-) {
-  if (!enabled) return matchQuestion(query, candidates, thresholds);
-  const preferences = feedbackPreferences(query, fieldType, new Set(candidates.map(({ key }) => key)), records, thresholds);
-  const matched = matchQuestionWithFeedback(query, candidates, thresholds, preferences);
-  return calibrateFeedbackConfidence(matched, query, fieldType, records, thresholds);
-}
 
 function savedWorkHistory(stored: Record<string, unknown>): StoredJobHistory[] {
   const file = stored.workHistory as StoredWorkHistoryFile | undefined;
@@ -521,7 +506,7 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
       && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement);
     if (isText) {
       if (target.value.trim().length > 0 || (target instanceof HTMLInputElement && !previewableInputTypes.has(target.type))) return false;
-    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds', 'learningFeedbackEnabled', 'suggestionFeedback']);
+    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
       if (!target.isConnected || target.value.length > 0) return false;
       const answers = stored.answers as StoredAnswers | undefined;
       const history = savedWorkHistory(stored);
@@ -535,7 +520,7 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
         ...candidate,
         questions: candidate.key === hintedKey ? [...candidate.questions, descriptor.question] : candidate.questions,
       }));
-      const match = matchWithFeedback(questionForMatching(descriptor), candidatesWithHints, thresholds, stored.suggestionFeedback, stored.learningFeedbackEnabled === true, 'text');
+      const match = matchQuestion(questionForMatching(descriptor), candidatesWithHints, thresholds);
       if (!match.bestKey || match.confidence === 'none') return false;
       const answer = answerByKey.get(match.bestKey);
       if (answer === undefined) return false;
@@ -548,13 +533,13 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
     }
 
     if (hasRealChoice(target)) return false;
-      const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds', 'learningFeedbackEnabled', 'suggestionFeedback']);
+      const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
     if (!target.isConnected || hasRealChoice(target)) return false;
     const answers = stored.answers as StoredAnswers | undefined;
     const history = savedWorkHistory(stored);
     if (!answers && history.length === 0) return false;
     const context = await previewContext(stored);
-    const choice = getStoredChoice(questionForMatching(descriptor), focusedChoices(target), answers ?? {}, validThresholds(stored.matchingThresholds), context, history, stored.suggestionFeedback, stored.learningFeedbackEnabled === true);
+    const choice = getStoredChoice(questionForMatching(descriptor), focusedChoices(target), answers ?? {}, validThresholds(stored.matchingThresholds), context, history);
     if (!choice || !setChoiceValue(target, choice.option)) return false;
     reportMatchedField(target);
     return true;
@@ -774,38 +759,6 @@ function focusedChoices(target: HTMLElement): SelectChoice[] {
   }).filter((option) => Boolean(option.label));
 }
 
-function selectedChoiceValue(target: HTMLElement, choices: SelectChoice[]): string | undefined {
-  if (target instanceof HTMLSelectElement) {
-    const selected = target.selectedOptions[0];
-    if (!selected || isPlaceholderOption(selected.label || selected.textContent || '', selected.value)) return undefined;
-    return selected.label || selected.textContent?.trim() || selected.value;
-  }
-  const selectedOption = choices.find(({ element }) => element.getAttribute('aria-checked') === 'true'
-    || element.getAttribute('aria-selected') === 'true'
-    || (element instanceof HTMLInputElement && element.checked));
-  if (selectedOption) return selectedOption.label;
-
-  if (isChoiceWidget(target)) {
-    if (choiceWidgetExpanded(target)) return undefined;
-    const value = (target.getAttribute('aria-valuetext') || target.getAttribute('data-value')
-      || (target instanceof HTMLInputElement ? target.value : '')).trim();
-    if (value && !isPlaceholderOption(value, 'has-value')) {
-      return choices.find((choice) => choice.label === value || choice.value === value)?.label ?? value;
-    }
-    const label = (target.textContent || '').replace(/\s+/g, ' ').trim();
-    return label && !isPlaceholderOption(label, 'has-value') ? label : undefined;
-  }
-  return undefined;
-}
-
-function sameChoice(left: string, right: SelectChoice): boolean {
-  const normalize = (value: string) => normalizeText(value).join(' ');
-  const normalizedLeft = normalize(left);
-  return [right.label, right.value ?? ''].some((value) => value !== '' && (
-    normalizedLeft === normalize(value) || left.trim().toLocaleLowerCase() === value.trim().toLocaleLowerCase()
-  ));
-}
-
 function hasRealChoice(target: HTMLElement): boolean {
   if (isChoiceWidget(target)) {
     const explicitValue = (target.getAttribute('aria-valuetext') || target.getAttribute('data-value') || '').trim();
@@ -836,7 +789,7 @@ function hasRealChoice(target: HTMLElement): boolean {
   return controls.some((input) => input.checked);
 }
 
-function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Array<'choice' | 'yesno'>, thresholds: Thresholds, context: PageContext, feedbackRecords: unknown, learningEnabled: boolean) {
+function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Array<'choice' | 'yesno'>, thresholds: Thresholds, context: PageContext) {
   const candidates: MatchCandidate[] = [];
   const entries = new Map<string, NonNullable<StoredAnswers['answers']>[number]>();
   for (const [index, entry] of (answers.answers ?? []).entries()) {
@@ -845,7 +798,7 @@ function matchStoredEntry(question: string, answers: StoredAnswers, allowed: Arr
     candidates.push({ key, questions: entry.questions.map((wording) => resolveQuestionPlaceholders(wording, context)) });
     entries.set(key, entry);
   }
-  const match = matchWithFeedback(question, candidates, thresholds, feedbackRecords, learningEnabled, 'choice');
+  const match = matchQuestion(question, candidates, thresholds);
   return match.bestKey && match.confidence !== 'none'
     ? { key: match.bestKey, entry: entries.get(match.bestKey), confidence: match.confidence, score: match.bestScore, runnerUpScore: match.secondScore }
     : undefined;
@@ -865,11 +818,9 @@ function getStoredChoice(
   thresholds: Thresholds,
   context: PageContext = {},
   history: StoredJobHistory[] = [],
-  feedbackRecords: unknown = [],
-  learningEnabled = false,
 ): { option: SelectChoice; confidence: 'high' | 'medium'; sensitive: boolean; answerKey?: string; score?: number } | undefined {
   if (options.length === 0) return undefined;
-  const storedMatch = matchStoredEntry(question, answers, ['choice', 'yesno'], thresholds, context, feedbackRecords, learningEnabled);
+  const storedMatch = matchStoredEntry(question, answers, ['choice', 'yesno'], thresholds, context);
   const fact = factFor(question, answers);
   const entry = storedMatch?.entry;
   const booleanAnswer = entry?.type === 'yesno' && typeof entry.answer === 'boolean'
@@ -891,10 +842,10 @@ function getStoredChoice(
     };
   }
 
-  const profileMatch = matchWithFeedback(question, [
+  const profileMatch = matchQuestion(question, [
     ...profileCandidates(answers.profile, answers.profileQuestions, context),
     ...workHistoryCandidates(history, context),
-  ], thresholds, feedbackRecords, learningEnabled, 'choice');
+  ], thresholds);
   if (profileMatch.bestKey?.startsWith('workHistory[')
     && profileMatch.secondKey?.startsWith('workHistory[')
     && profileMatch.bestScore - profileMatch.secondScore < 0.08) return undefined;
@@ -959,7 +910,6 @@ function installChoicePreview(
   option: SelectChoice,
   choices: SelectChoice[],
   highlighted: boolean,
-  feedback: { enabled: boolean; question: string; answerKey?: string; score?: number },
 ): void {
   clearActivePreview();
   if (hasRealChoice(target)) return;
@@ -983,10 +933,6 @@ function installChoicePreview(
   const cleanup = () => restore();
   const accept = () => {
     if (hasRealChoice(target)) return;
-    if (feedback.enabled) void saveSuggestionFeedback({
-      action: 'useful', question: feedback.question, answer: option.label,
-      answerKey: feedback.answerKey, fieldType: 'choice', score: feedback.score,
-    });
     restore();
     activePreview = undefined;
     if (isChoiceWidget(target)) {
@@ -1017,21 +963,6 @@ function installChoicePreview(
       || (changed instanceof Node && target.contains(changed))
       || choices.some(({ element }) => element === changed || (changed instanceof Node && element.contains(changed)));
     if (!belongsToChoice) return;
-    const changedOption = choices.find(({ element }) => element === changed
-      || (changed instanceof Node && element.contains(changed)));
-    const selected = changedOption?.label ?? selectedChoiceValue(target, choices);
-    if (feedback.enabled && selected) {
-      const useful = sameChoice(selected, option);
-      void saveSuggestionFeedback({
-        action: useful ? 'useful' : 'wrong',
-        question: feedback.question,
-        answer: option.label,
-        replacementAnswer: useful ? undefined : selected,
-        answerKey: feedback.answerKey,
-        fieldType: 'choice',
-        score: feedback.score,
-      });
-    }
     restore();
     activePreview = undefined;
   };
@@ -1073,7 +1004,7 @@ export async function showChoicePreview(
 
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds', 'learningFeedbackEnabled', 'suggestionFeedback']);
+    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
     if (document.activeElement !== target && !target.contains(document.activeElement)) return;
     const answers = stored.answers as StoredAnswers | undefined;
     const history = savedWorkHistory(stored);
@@ -1081,15 +1012,10 @@ export async function showChoicePreview(
     const thresholds = validThresholds(stored.matchingThresholds);
     const options = focusedChoices(target);
     const context = await previewContext(stored);
-    const choice = getStoredChoice(questionForMatching(descriptor), options, answers ?? {}, thresholds, context, history, stored.suggestionFeedback, stored.learningFeedbackEnabled === true);
+    const choice = getStoredChoice(questionForMatching(descriptor), options, answers ?? {}, thresholds, context, history);
     if (!choice) return;
     const highlighted = choice.confidence === 'medium' || choice.sensitive;
-    installChoicePreview(target, choice.option, options, highlighted, {
-      enabled: stored.learningFeedbackEnabled === true,
-      question: questionForMatching(descriptor),
-      answerKey: choice.answerKey,
-      score: choice.score,
-    });
+    installChoicePreview(target, choice.option, options, highlighted);
   } catch {
     // A storage failure must never alter a choice or interrupt normal form entry.
   }
@@ -1100,7 +1026,6 @@ function installPreview(
   text: string,
   highlighted: boolean,
   blocked: boolean,
-  feedback: { enabled: boolean; question: string; answerKey?: string; score?: number },
 ): void {
   clearActivePreview();
   if (field.value.length > 0) return;
@@ -1118,8 +1043,6 @@ function installPreview(
     if (highlighted) field.dataset.jobAutofillPreview = 'highlighted';
   }
   let accepted = false;
-  let feedbackRecorded = false;
-  let correctionTimer: number | undefined;
   const restore = () => {
     if (dateField) suggestion?.remove();
     else {
@@ -1134,53 +1057,13 @@ function installPreview(
   const cleanup = () => restore();
   const accept = () => {
     if (blocked || field.value.length > 0) return;
-    if (feedback.enabled) void saveSuggestionFeedback({
-      action: 'useful', question: feedback.question, answer: text,
-      answerKey: feedback.answerKey, fieldType: 'text', score: feedback.score,
-    });
     accepted = true;
     restore();
     activePreview = undefined;
     nativeSetValue(field, text);
   };
-  const recordWrongSuggestion = (typedAnswer?: string) => {
-    if (!feedback.enabled || feedbackRecorded) return;
-    if (typedAnswer !== undefined && !typedAnswer.trim()) return;
-    feedbackRecorded = true;
-    const sameAsSuggestion = typedAnswer !== undefined
-      && normalizeText(typedAnswer).join(' ') === normalizeText(text).join(' ');
-    void saveSuggestionFeedback({
-      action: sameAsSuggestion || typedAnswer === undefined ? 'useful' : 'wrong',
-      question: feedback.question,
-      answer: text,
-      typedAnswer: sameAsSuggestion ? undefined : typedAnswer?.trim(),
-      answerKey: feedback.answerKey,
-      fieldType: 'text', score: feedback.score,
-    });
-  };
-  const removeCorrectionListeners = () => {
-    field.removeEventListener('input', onCorrectionInput);
-    field.removeEventListener('blur', saveCorrection);
-  };
-  const saveCorrection = () => {
-    if (correctionTimer !== undefined) window.clearTimeout(correctionTimer);
-    correctionTimer = undefined;
-    recordWrongSuggestion(field.value);
-    removeCorrectionListeners();
-  };
-  const onCorrectionInput = (event: Event) => {
-    if (!event.isTrusted) return;
-    if (correctionTimer !== undefined) window.clearTimeout(correctionTimer);
-    correctionTimer = window.setTimeout(saveCorrection, 700);
-  };
   const onInput = (event: Event) => {
     if (!accepted && field.value.length > 0) {
-      if (event.isTrusted && feedback.enabled) {
-        field.addEventListener('input', onCorrectionInput);
-        field.addEventListener('blur', saveCorrection);
-        if (correctionTimer !== undefined) window.clearTimeout(correctionTimer);
-        correctionTimer = window.setTimeout(saveCorrection, 700);
-      }
       restore();
       activePreview = undefined;
     }
@@ -1230,7 +1113,7 @@ export async function showTextPreview(
 
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds', 'learningFeedbackEnabled', 'suggestionFeedback']);
+    const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
     if (document.activeElement !== target) return;
     const answers = stored.answers as StoredAnswers | undefined;
     const history = savedWorkHistory(stored);
@@ -1245,7 +1128,7 @@ export async function showTextPreview(
       ...candidate,
       questions: candidate.key === hintedKey ? [...candidate.questions, descriptor.question] : candidate.questions,
     }));
-    const match = matchWithFeedback(questionForMatching(descriptor), candidatesWithHints, thresholds, stored.suggestionFeedback, stored.learningFeedbackEnabled === true, 'text');
+    const match = matchQuestion(questionForMatching(descriptor), candidatesWithHints, thresholds);
     if (!match.bestKey || match.confidence === 'none') return;
     if (match.bestKey.startsWith('workHistory[') && match.secondKey?.startsWith('workHistory[')
       && match.bestScore - match.secondScore < 0.08) return;
@@ -1255,12 +1138,7 @@ export async function showTextPreview(
     const dateValue = datePartForQuestion(dateKeyForCandidate(match.bestKey), answer, questionForMatching(descriptor));
     const resolved = resolvePlaceholders(dateValue, context);
     const highlighted = match.confidence === 'medium' || sensitiveByKey.has(match.bestKey) || resolved.missing.length > 0;
-    installPreview(target, resolved.text, highlighted, resolved.missing.length > 0, {
-      enabled: stored.learningFeedbackEnabled === true,
-      question: questionForMatching(descriptor),
-      answerKey: match.bestKey,
-      score: match.bestScore,
-    });
+    installPreview(target, resolved.text, highlighted, resolved.missing.length > 0);
   } catch {
     // A storage failure must never change the field or interrupt normal form entry.
   }
