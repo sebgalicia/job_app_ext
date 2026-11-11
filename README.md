@@ -4,12 +4,12 @@ A lightweight Firefox and Zen extension that helps you answer repeat questions o
 
 ## Who it helps
 
-Job seekers who are tired of repeatedly entering the same profile details and answers across application forms. The extension can suggest saved answers as you focus fields, or optionally fill eligible fields as each application step opens so you can review them before continuing.
+Job seekers who are tired of repeatedly entering the same profile details and answers across application forms. The extension fills matching fields as each application step opens so you can review them before continuing, and suggests saved answers for the rest as you focus them.
 
 ## What it does
 
 - Finds questions on supported application sites and compares them with wording in your answers file.
-- Shows one field preview at a time, or optionally fills visible, empty fields when a step opens.
+- Fills visible, empty fields when a step opens, and shows a preview for the remaining fields as you focus them.
 - Leaves fields with existing answers alone and never submits an application.
 - Lets you save company and role details and optionally track applications locally.
 - Works with a rules-based matcher; it does not use an AI model or remote matching service.
@@ -62,9 +62,9 @@ Keep personal answers private. Do not add your completed answers file to this re
 
 ## Preview and automatic filling
 
-With automatic filling off, focus an empty field to see a suggestion. **Tab** accepts a normal suggestion. Medium-confidence and sensitive suggestions are highlighted and require **Enter**; **Tab** moves on without accepting them. Typing dismisses a text preview, and **Esc** dismisses it without filling. The extension does not overwrite a field that already has text or a real choice selected.
+Focus any empty field the automatic pass left blank to see a suggestion. **Tab** accepts a normal suggestion. Medium-confidence and sensitive suggestions are highlighted and require **Enter**; **Tab** moves on without accepting them. Typing dismisses a text preview, and **Esc** dismisses it without filling. The extension does not overwrite a field that already has text or a real choice selected.
 
-The optional **Fill matching fields as each step opens, then wait** setting fills visible, empty fields that have a High-confidence match. Medium-confidence matches are never filled automatically; they still appear as highlighted previews when you focus the field. It then waits for you to press Next or Continue before checking the newly opened step. Review the values before submitting; the extension never submits applications.
+By default, **Fill fields as each step opens** fills visible, empty fields that have a High-confidence match. Turn it off in Settings if you prefer previews only. Medium-confidence matches are never filled automatically; they still appear as highlighted previews when you focus the field. It then waits for you to press Next or Continue before checking the newly opened step. Review the values before submitting; the extension never submits applications.
 
 Settings also has a separate, off-by-default **Auto-select agreement and acknowledgment** option. When enabled, it selects a clearly affirmative response only for terms-of-service, privacy-policy, and explicit truthfulness acknowledgment prompts. It types `yes` only when that prompt specifically requests the word, fills explicit signature fields with the saved profile name, and fills associated signature dates with today's local date. It does not answer unrelated Yes/No questions or submit the form.
 

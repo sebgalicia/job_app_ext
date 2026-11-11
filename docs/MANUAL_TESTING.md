@@ -16,7 +16,7 @@ Start the local fixture server with `npm run serve:fixtures`, open a fixture pag
 
 ## One-pass automatic filling
 
-- [ ] The setting is off by default and remains off after reinstall or with no saved preference.
+- [ ] The setting is on by default (no saved preference), and stays off after you turn it off.
 - [ ] When enabled, opening a supported application page fills visible, empty fields with Medium or High confidence matches; focus previews do not appear in this mode.
 - [ ] Existing text and selected choices are never overwritten; low-confidence or missing-context answers stay empty.
 - [ ] The pass does not submit the form or react to focus events; after pressing Next/Continue, it fills visible, empty fields in the newly revealed step.

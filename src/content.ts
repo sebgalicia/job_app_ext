@@ -26,12 +26,14 @@ const previewBrowser = (globalThis as typeof globalThis & { browser: {
 let pageAutomationStopped = false;
 let siteAllowsAutofill = false;
 let nextStepScanTimer: number | undefined;
+// Filling as each step opens is the default; only an explicit "off" in Settings disables it.
 const onePassAutofillEnabled = previewBrowser.storage.local.get('autofillOnOpen')
-  .then((stored) => stored.autofillOnOpen === true)
+  .then((stored) => stored.autofillOnOpen !== false)
   .catch(() => false);
 
 async function processFocusedControl(target: EventTarget | null): Promise<void> {
-  if (pageAutomationStopped || await onePassAutofillEnabled) return;
+  // Focus suggestions stay on after an automatic pass: they cover fields the pass
+  // skipped (such as closed custom dropdowns) and never change a field without Tab/Enter.
   if (!isEligibleControl(target)) return;
   try {
     const stored = await previewBrowser.storage.local.get('siteEnabled');
@@ -96,14 +98,6 @@ async function autofillPageOnce(): Promise<void> {
     await scanVisibleFieldsOnce(true);
   } catch {
     // A failed automatic pass remains contained to this page and does not submit the form.
-  } finally {
-    const settings = await previewBrowser.storage.local.get('autoAgreeTerms').catch(() => ({ autoAgreeTerms: false }));
-    if (settings.autoAgreeTerms !== true) {
-      document.removeEventListener('focusin', handleFocus);
-      document.removeEventListener('input', refreshActiveCombobox);
-      document.removeEventListener('click', refreshActiveCombobox);
-      document.removeEventListener('keyup', refreshActiveCombobox);
-    }
   }
 }
 

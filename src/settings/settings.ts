@@ -228,8 +228,8 @@ autofillOnOpen.addEventListener('change', async () => {
   try {
     await browserApi.storage.local.set({ [autofillKey]: autofillOnOpen.checked });
     autofillStatus.textContent = autofillOnOpen.checked
-      ? 'One-pass automatic filling is enabled on pages opened from now on.'
-      : 'One-pass automatic filling is disabled.';
+      ? 'Fields will fill as each step opens on pages loaded from now on.'
+      : 'Automatic filling is off. Focus a field to see a suggestion instead.';
     autofillStatus.className = 'status-message success';
   } catch {
     autofillStatus.textContent = 'Could not save the automatic filling setting.';
@@ -241,7 +241,7 @@ autofillOnOpen.addEventListener('change', async () => {
 async function loadAutofillSetting(): Promise<void> {
   try {
     const stored = await browserApi.storage.local.get(autofillKey);
-    autofillOnOpen.checked = stored[autofillKey] === true;
+    autofillOnOpen.checked = stored[autofillKey] !== false;
   } catch {
     autofillOnOpen.checked = false;
     autofillStatus.textContent = 'Could not read the setting; automatic filling is off.';
