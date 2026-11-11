@@ -8,7 +8,7 @@ export class WorkdayAdapter implements FormAdapter {
   questionParts(field: HTMLElement): string[] {
     const parts = this.generic.questionParts(field);
     const wrapper = field.closest(
-      '[data-automation-id="formField"], [data-automation-id="fieldSet"], [data-automation-id="question"]',
+      '[data-automation-id="formField"], [data-automation-id^="formField-"], [data-automation-id="fieldSet"], [data-automation-id="question"]',
     );
     const label = wrapper?.querySelector(
       '[data-automation-id="formField-label"], [data-automation-id="questionTitle"], label, legend',

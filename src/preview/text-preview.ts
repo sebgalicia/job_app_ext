@@ -2,6 +2,7 @@ import { defaultThresholds, matchQuestion, scoreSimilarity, validThresholds, typ
 import { normalizeText } from '../matching/normalize';
 import { chooseFactOption, type ChoiceOption } from '../matching/polarity';
 import { resolveTopicFact } from '../matching/topics';
+import { profileKeyHint } from '../matching/field-hints';
 import { ariaComboboxOptions, choiceWidgetExpanded, isChoiceWidget, type DetectedField } from '../adapters/field';
 
 export type StoredAnswers = {
@@ -39,6 +40,7 @@ function savedWorkHistory(stored: Record<string, unknown>): StoredJobHistory[] {
 }
 
 const profileQuestions: Record<string, string[]> = {
+  fullName: ['full name', 'name', 'your name', 'legal name', 'full legal name', 'candidate name', 'applicant name'],
   firstName: ['first name', 'given name', 'your first name'],
   middleName: ['middle name', 'middle initial'],
   lastName: ['last name', 'family name', 'surname'],
@@ -90,11 +92,6 @@ const profileQuestions: Record<string, string[]> = {
   professionalSummary: ['professional summary', 'career summary', 'professional profile', 'about you'],
 };
 
-const autocompleteProfileKey: Record<string, string> = {
-  'given-name': 'firstName', 'family-name': 'lastName', email: 'email', tel: 'phone',
-  'address-line1': 'address', 'address-level2': 'city', 'address-level1': 'state',
-  'postal-code': 'zip', 'country-name': 'country',
-};
 const previewableInputTypes = new Set(['text', 'email', 'tel', 'url', 'search', 'number', 'date']);
 
 let activePreview: { field: PreviewTarget; cleanup: () => void } | undefined;
@@ -349,10 +346,28 @@ export function makeCandidates(
   return { candidates, answerByKey, sensitiveByKey };
 }
 
-function profileTypeHint(field: DetectedField): string | undefined {
-  const token = field.autocomplete?.trim().split(/\s+/).at(-1);
-  return (token && autocompleteProfileKey[token])
-    ?? (field.inputType === 'email' ? 'email' : field.inputType === 'tel' ? 'phone' : undefined);
+/** Add fields people expect but rarely write out, such as fullName from first and last name. */
+export function withDerivedProfile(answers: StoredAnswers | undefined): StoredAnswers | undefined {
+  if (!answers?.profile) return answers;
+  const profile = { ...answers.profile };
+  const first = String(profile.firstName ?? '').trim();
+  const last = String(profile.lastName ?? '').trim();
+  if (!String(profile.fullName ?? '').trim() && first && last) profile.fullName = `${first} ${last}`;
+  return { ...answers, profile };
+}
+
+/**
+ * Match a text field. A deterministic markup hint (autocomplete, ATS input names)
+ * for a profile field the user has filled wins outright with High confidence;
+ * otherwise fall back to wording similarity.
+ */
+function matchTextField(descriptor: DetectedField, candidates: MatchCandidate[], answerByKey: Map<string, string>, thresholds: Thresholds) {
+  const hint = profileKeyHint(descriptor);
+  const hintedKey = hint ? `profile.${hint}` : undefined;
+  if (hintedKey && answerByKey.get(hintedKey)?.trim()) {
+    return { bestKey: hintedKey, bestScore: 1, secondKey: undefined, secondScore: 0, confidence: 'high' as const };
+  }
+  return matchQuestion(questionForMatching(descriptor), candidates, thresholds);
 }
 
 function questionForMatching(descriptor: DetectedField): string {
@@ -509,20 +524,18 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
       if (target.value.trim().length > 0 || (target instanceof HTMLInputElement && !previewableInputTypes.has(target.type))) return false;
     const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
       if (!target.isConnected || target.value.length > 0) return false;
-      const answers = stored.answers as StoredAnswers | undefined;
+      const answers = withDerivedProfile(stored.answers as StoredAnswers | undefined);
       const history = savedWorkHistory(stored);
       if (!answers && history.length === 0) return false;
       const thresholds = validThresholds(stored.matchingThresholds);
       const context = await previewContext(stored);
       const { candidates, answerByKey } = makeCandidates(answers ?? {}, context, history);
-      const hint = profileTypeHint(descriptor);
-      const hintedKey = hint ? `profile.${hint}` : undefined;
-      const candidatesWithHints = candidates.map((candidate) => ({
-        ...candidate,
-        questions: candidate.key === hintedKey ? [...candidate.questions, descriptor.question] : candidate.questions,
-      }));
-      const match = matchQuestion(questionForMatching(descriptor), candidatesWithHints, thresholds);
-      if (!match.bestKey || match.confidence === 'none') return false;
+      const match = matchTextField(descriptor, candidates, answerByKey, thresholds);
+      // Automatic filling has no review step before the value lands, so it only
+      // uses High-confidence matches. Medium matches stay available as previews.
+      if (!match.bestKey || match.confidence !== 'high') return false;
+      if (match.bestKey.startsWith('workHistory[') && match.secondKey?.startsWith('workHistory[')
+        && match.bestScore - match.secondScore < 0.08) return false;
       const answer = answerByKey.get(match.bestKey);
       if (answer === undefined) return false;
       const dateValue = datePartForQuestion(dateKeyForCandidate(match.bestKey), answer, questionForMatching(descriptor));
@@ -536,12 +549,12 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
     if (hasRealChoice(target)) return false;
       const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
     if (!target.isConnected || hasRealChoice(target)) return false;
-    const answers = stored.answers as StoredAnswers | undefined;
+    const answers = withDerivedProfile(stored.answers as StoredAnswers | undefined);
     const history = savedWorkHistory(stored);
     if (!answers && history.length === 0) return false;
     const context = await previewContext(stored);
-    const choice = getStoredChoice(questionForMatching(descriptor), focusedChoices(target), answers ?? {}, validThresholds(stored.matchingThresholds), context, history);
-    if (!choice || !setChoiceValue(target, choice.option)) return false;
+    const choice = getStoredChoice(questionForMatching(descriptor), focusedChoices(target), answers ?? {}, validThresholds(stored.matchingThresholds), context, history, profileKeyHint(descriptor));
+    if (!choice || choice.confidence !== 'high' || !setChoiceValue(target, choice.option)) return false;
     reportMatchedField(target);
     return true;
   } catch {
@@ -553,7 +566,7 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
 function agreementPromptText(target: HTMLElement, descriptor: DetectedField): string {
   const parts = [...descriptor.questionParts, descriptor.question];
   const wrapper = target.closest<HTMLElement>(
-    'label, fieldset, [role="group"], .field, .application-question, [data-qa="question"], [data-testid*="question" i], [data-automation-id="formField"], [data-automation-id="question"]',
+    'label, fieldset, [role="group"], .field, .application-question, [data-qa="question"], [data-testid*="question" i], [data-automation-id="formField"], [data-automation-id^="formField-"], [data-automation-id="question"]',
   );
   const wrapperText = wrapper?.textContent?.replace(/\s+/g, ' ').trim();
   if (wrapperText && wrapperText.length <= 2000) parts.push(wrapperText);
@@ -814,6 +827,7 @@ function getStoredChoice(
   thresholds: Thresholds,
   context: PageContext = {},
   history: StoredJobHistory[] = [],
+  hintedProfileKey?: string,
 ): { option: SelectChoice; confidence: 'high' | 'medium'; sensitive: boolean; answerKey?: string; score?: number } | undefined {
   if (options.length === 0) return undefined;
   const storedMatch = matchStoredEntry(question, answers, ['choice', 'yesno'], thresholds, context);
@@ -841,10 +855,14 @@ function getStoredChoice(
     if (typeof entry?.answer === 'boolean') return undefined;
   }
 
-  const profileMatch = matchQuestion(question, [
+  const profileCandidateList = [
     ...profileCandidates(answers.profile, answers.profileQuestions, context),
     ...workHistoryCandidates(history, context),
-  ], thresholds);
+  ];
+  const hintedKey = hintedProfileKey ? `profile.${hintedProfileKey}` : undefined;
+  const profileMatch = hintedKey && profileCandidateList.some(({ key }) => key === hintedKey)
+    ? { bestKey: hintedKey, bestScore: 1, secondKey: undefined, secondScore: 0, confidence: 'high' as const }
+    : matchQuestion(question, profileCandidateList, thresholds);
   if (profileMatch.bestKey?.startsWith('workHistory[')
     && profileMatch.secondKey?.startsWith('workHistory[')
     && profileMatch.bestScore - profileMatch.secondScore < 0.08) return undefined;
@@ -1012,13 +1030,13 @@ export async function showChoicePreview(
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
     const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
     if (document.activeElement !== target && !target.contains(document.activeElement)) return;
-    const answers = stored.answers as StoredAnswers | undefined;
+    const answers = withDerivedProfile(stored.answers as StoredAnswers | undefined);
     const history = savedWorkHistory(stored);
     if (!answers && history.length === 0) return;
     const thresholds = validThresholds(stored.matchingThresholds);
     const options = focusedChoices(target);
     const context = await previewContext(stored);
-    const choice = getStoredChoice(questionForMatching(descriptor), options, answers ?? {}, thresholds, context, history);
+    const choice = getStoredChoice(questionForMatching(descriptor), options, answers ?? {}, thresholds, context, history, profileKeyHint(descriptor));
     if (!choice) return;
     const highlighted = choice.confidence === 'medium' || choice.sensitive;
     installChoicePreview(target, choice.option, options, highlighted);
@@ -1121,20 +1139,14 @@ export async function showTextPreview(
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
     const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
     if (document.activeElement !== target) return;
-    const answers = stored.answers as StoredAnswers | undefined;
+    const answers = withDerivedProfile(stored.answers as StoredAnswers | undefined);
     const history = savedWorkHistory(stored);
     if (!answers && history.length === 0) return;
     const thresholds = validThresholds(stored.matchingThresholds);
 
     const context = await previewContext(stored);
     const { candidates, answerByKey, sensitiveByKey } = makeCandidates(answers ?? {}, context, history);
-    const hint = profileTypeHint(descriptor);
-    const hintedKey = hint ? `profile.${hint}` : undefined;
-    const candidatesWithHints = candidates.map((candidate) => ({
-      ...candidate,
-      questions: candidate.key === hintedKey ? [...candidate.questions, descriptor.question] : candidate.questions,
-    }));
-    const match = matchQuestion(questionForMatching(descriptor), candidatesWithHints, thresholds);
+    const match = matchTextField(descriptor, candidates, answerByKey, thresholds);
     if (!match.bestKey || match.confidence === 'none') return;
     if (match.bestKey.startsWith('workHistory[') && match.secondKey?.startsWith('workHistory[')
       && match.bestScore - match.secondScore < 0.08) return;

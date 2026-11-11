@@ -7,6 +7,8 @@ export type DetectedField = {
   fieldType: 'text' | 'choice' | 'yesno';
   inputType?: string;
   autocomplete?: string;
+  /** Machine names from markup (name, id, data-automation-id, ...) used for deterministic profile hints. */
+  attributeHints: string[];
   groupSize: number;
   optionLabels: string[];
 };
@@ -148,6 +150,9 @@ export function describeFocusedField(
     fieldType,
     inputType: field instanceof HTMLInputElement ? field.type : undefined,
     autocomplete: field.getAttribute('autocomplete') ?? undefined,
+    attributeHints: ['name', 'id', 'data-automation-id', 'data-qa', 'data-testid']
+      .map((attribute) => field.getAttribute(attribute)?.trim() ?? '')
+      .filter(Boolean),
     groupSize: members.length,
     optionLabels,
   };

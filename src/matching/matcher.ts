@@ -68,21 +68,24 @@ function trigramSimilarity(left: string, right: string): number {
   return union ? intersection / union : 0;
 }
 
-export function scoreSimilarity(query: string, candidate: string, corpus: string[] = [candidate]): number {
-  const normalizedQuery = normalizeText(query);
-  const normalizedCandidate = normalizeText(candidate);
-  if (normalizedQuery.length === 0 || normalizedCandidate.length === 0) return 0;
-
-  const documents = corpus.map(normalizeText);
+function inverseDocumentFrequency(documents: string[][]): Map<string, number> {
   const documentFrequency = new Map<string, number>();
   for (const doc of documents) {
     for (const token of new Set(doc)) documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1);
   }
-  const idf = new Map([...documentFrequency].map(([token, df]) => [token, Math.log(1 + documents.length / (1 + df)) + 1]));
+  return new Map([...documentFrequency].map(([token, df]) => [token, Math.log(1 + documents.length / (1 + df)) + 1]));
+}
+
+function scoreTokens(normalizedQuery: string[], normalizedCandidate: string[], idf: Map<string, number>): number {
+  if (normalizedQuery.length === 0 || normalizedCandidate.length === 0) return 0;
   const cosineScore = cosine(normalizedQuery, normalizedCandidate, idf);
   const overlapScore = overlap(normalizedQuery, normalizedCandidate);
   const trigramScore = trigramSimilarity(normalizedQuery.join(' '), normalizedCandidate.join(' '));
   return 0.5 * cosineScore + 0.25 * overlapScore + 0.25 * trigramScore;
+}
+
+export function scoreSimilarity(query: string, candidate: string, corpus: string[] = [candidate]): number {
+  return scoreTokens(normalizeText(query), normalizeText(candidate), inverseDocumentFrequency(corpus.map(normalizeText)));
 }
 
 function confidenceFor(score: number, thresholds: Thresholds): Confidence {
@@ -97,11 +100,18 @@ export function matchQuestion(
   candidates: MatchCandidate[],
   thresholds: Thresholds = defaultThresholds,
 ): MatchResult {
-  const corpus = candidates.flatMap((candidate) => candidate.questions);
-  const scores = candidates
-    .map((candidate) => ({
-      key: candidate.key,
-      score: Math.max(0, ...candidate.questions.map((wording) => scoreSimilarity(query, wording, corpus))),
+  // Normalize every wording and build the word weights once per call; doing it per
+  // comparison made each field cost grow with the square of the saved wordings.
+  const normalizedCandidates = candidates.map((candidate) => ({
+    key: candidate.key,
+    wordings: candidate.questions.map(normalizeText),
+  }));
+  const idf = inverseDocumentFrequency(normalizedCandidates.flatMap(({ wordings }) => wordings));
+  const normalizedQuery = normalizeText(query);
+  const scores = normalizedCandidates
+    .map(({ key, wordings }) => ({
+      key,
+      score: Math.max(0, ...wordings.map((wording) => scoreTokens(normalizedQuery, wording, idf))),
     }))
     .sort((a, b) => b.score - a.score);
   const best = scores[0];

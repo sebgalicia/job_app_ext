@@ -7,6 +7,15 @@
     <h1>Software Engineer application at Example Company</h1>
     <form>
       <section id="workday-step-one">
+      <!-- Production Workday names wrappers formField-<field> and labels without for=. -->
+      <div data-automation-id="formField-legalNameSection_firstName">
+        <label data-automation-id="formField-label">Given Name(s)</label>
+        <input data-automation-id="legalNameSection_firstName" type="text">
+      </div>
+      <div data-automation-id="formField-legalNameSection_lastName">
+        <label data-automation-id="formField-label">Family Name</label>
+        <input data-automation-id="legalNameSection_lastName" type="text">
+      </div>
       <div data-automation-id="formField">
         <label data-automation-id="formField-label" for="workday-email">Email address</label>
         <input id="workday-email" name="email" type="email" autocomplete="email">
