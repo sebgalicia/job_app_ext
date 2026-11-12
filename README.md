@@ -2,10 +2,6 @@
 
 A lightweight Firefox and Zen extension that helps you answer repeat questions on job applications using answers you save yourself. It keeps your answers in local browser storage and does not send them to a server.
 
-## Who it helps
-
-Job seekers who are tired of repeatedly entering the same profile details and answers across application forms. The extension fills matching fields as each application step opens so you can review them before continuing, and suggests saved answers for the rest as you focus them.
-
 ## What it does
 
 - Finds questions on supported application sites and compares them with wording in your answers file.

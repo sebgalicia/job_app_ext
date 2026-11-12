@@ -30,11 +30,12 @@
       </div>
       <div data-automation-id="formField">
         <span data-automation-id="formField-label">Preferred schedule</span>
-        <button type="button" role="combobox" aria-label="Preferred schedule" aria-expanded="true" aria-controls="workday-schedule-options">Choose a schedule</button>
-        <ul id="workday-schedule-options" role="listbox">
-          <li role="option" data-value="hybrid">Hybrid</li>
-          <li role="option" data-value="remote">Remote</li>
-        </ul>
+        <!-- Like production Workday: closed until clicked, options rendered in a page-level popup. -->
+        <button type="button" aria-haspopup="listbox" aria-label="Preferred schedule" aria-expanded="false" data-options="Hybrid|Remote">Select One</button>
+      </div>
+      <div data-automation-id="formField-addressSection_countryRegion">
+        <span data-automation-id="formField-label">Country</span>
+        <button type="button" aria-haspopup="listbox" aria-label="Country" aria-expanded="false" data-options="Canada|United States of America|Mexico">Select One</button>
       </div>
       <fieldset data-automation-id="fieldSet">
         <legend>Are you authorized to work without restriction?</legend>
@@ -52,6 +53,36 @@
     </form>
   </main>
   <script>
+    // Closed-by-default dropdowns: options exist only while open and select on mousedown.
+    for (const button of document.querySelectorAll('button[data-options]')) {
+      let menu;
+      const close = () => {
+        menu?.remove();
+        menu = undefined;
+        button.setAttribute('aria-expanded', 'false');
+      };
+      button.addEventListener('click', () => {
+        if (menu) return close();
+        setTimeout(() => {
+          menu = document.createElement('ul');
+          menu.setAttribute('role', 'listbox');
+          for (const text of button.dataset.options.split('|')) {
+            const item = document.createElement('li');
+            item.setAttribute('role', 'option');
+            item.textContent = text;
+            item.addEventListener('mousedown', (event) => {
+              event.preventDefault();
+              button.textContent = text;
+              close();
+            });
+            menu.append(item);
+          }
+          document.body.append(menu);
+          button.setAttribute('aria-expanded', 'true');
+        }, 150);
+      });
+      button.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
+    }
     document.querySelector('#workday-next').addEventListener('click', () => {
       document.querySelector('#workday-step-one').hidden = true;
       document.querySelector('#workday-step-two').hidden = false;

@@ -3,6 +3,8 @@ import { normalizeText } from '../matching/normalize';
 import { chooseFactOption, type ChoiceOption } from '../matching/polarity';
 import { resolveTopicFact } from '../matching/topics';
 import { profileKeyHint } from '../matching/field-hints';
+import { chooseConceptOption, chooseRangeOption } from '../matching/option-variants';
+import { clearTypedFilter, closeDropdown, filterDropdown, isDrivingDropdown, openDropdown, pressElement, settle, whileDriving } from './dropdown-driver';
 import { ariaComboboxOptions, choiceWidgetExpanded, isChoiceWidget, type DetectedField } from '../adapters/field';
 
 export type StoredAnswers = {
@@ -483,7 +485,7 @@ function nativeSetValue(field: PreviewField, value: string): void {
 function setChoiceValue(target: HTMLElement, choice: SelectChoice): boolean {
   if (isChoiceWidget(target)) {
     if (!choiceWidgetExpanded(target) || !choice.element.isConnected) return false;
-    choice.element.click();
+    pressElement(choice.element);
     dispatchNativeChoiceChange(target);
     return true;
   }
@@ -503,7 +505,7 @@ function setChoiceValue(target: HTMLElement, choice: SelectChoice): boolean {
   }
   if (target.getAttribute('role') === 'radio' || target.getAttribute('role') === 'checkbox') {
     if (!choice.element.isConnected || choice.element.getAttribute('aria-disabled') === 'true') return false;
-    choice.element.click();
+    pressElement(choice.element);
     dispatchNativeChoiceChange(choice.element);
     return true;
   }
@@ -515,9 +517,8 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
   if (!target.isConnected || target.matches(':disabled, [readonly]') || target.closest('[hidden], [aria-hidden="true"]')) return false;
   try {
     const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
-    // A closed autocomplete has no selectable options yet; leave it alone in
-    // one-pass mode instead of inserting text that may not select an option.
-    if (isChoiceWidget(target) && !choiceWidgetExpanded(target)) return false;
+    // Closed custom dropdowns have no options on the page yet: open them first.
+    if (isChoiceWidget(target) && !choiceWidgetExpanded(target)) return await autofillClosedDropdown(target, descriptor);
     const isText = !isChoiceWidget(target)
       && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement);
     if (isText) {
@@ -561,6 +562,114 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
     // A storage or page-control failure must not stop the rest of the one-time sweep.
     return false;
   }
+}
+
+/**
+ * Text a closed custom dropdown currently shows. React-style widgets show the chosen
+ * value beside their input rather than in it, so look at the nearby container too,
+ * but stop before a wrapper that also holds the question label.
+ */
+function dropdownDisplayText(target: HTMLElement): string {
+  const own = (target instanceof HTMLInputElement ? target.value : target.textContent ?? '').replace(/\s+/g, ' ').trim();
+  if (own) return own;
+  let element: HTMLElement | null = target.parentElement;
+  for (let depth = 0; element && depth < 2; depth += 1, element = element.parentElement) {
+    if (element.querySelector('label, legend, [role="listbox"]')) break;
+    const text = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (text) return text.length <= 160 ? text : '';
+  }
+  return '';
+}
+
+function dropdownHasValue(target: HTMLElement): boolean {
+  if (hasRealChoice(target)) return true;
+  const shown = dropdownDisplayText(target);
+  return Boolean(shown && !isPlaceholderOption(shown, 'has-value'));
+}
+
+/** Text worth typing into a searchable dropdown, from the answer this question would use. */
+function desiredChoiceTexts(
+  question: string,
+  answers: StoredAnswers,
+  thresholds: Thresholds,
+  context: PageContext,
+  history: StoredJobHistory[],
+  hintedProfileKey?: string,
+): string[] {
+  const topic = resolveTopicFact(question, answers);
+  if (topic) return [topic.value ? 'Yes' : 'No'];
+  const texts: string[] = [];
+  const stored = matchStoredEntry(question, answers, ['choice', 'yesno'], thresholds, context);
+  if (stored?.entry && stored.confidence === 'high') {
+    texts.push(typeof stored.entry.answer === 'boolean' ? (stored.entry.answer ? 'Yes' : 'No') : stored.entry.answer);
+  }
+  const candidates = [...profileCandidates(answers.profile, answers.profileQuestions, context), ...workHistoryCandidates(history, context)];
+  const hintedKey = hintedProfileKey && candidates.some(({ key }) => key === `profile.${hintedProfileKey}`)
+    ? `profile.${hintedProfileKey}`
+    : undefined;
+  const match = hintedKey ? { bestKey: hintedKey, confidence: 'high' } : matchQuestion(question, candidates, thresholds);
+  if (match.bestKey && match.confidence === 'high') {
+    const history_ = match.bestKey.match(/^workHistory\[(\d+)\]\.(company|title|description|startDate|endDate)$/);
+    const profileKey = match.bestKey.startsWith('profile.') ? match.bestKey.slice('profile.'.length) : undefined;
+    const value = profileKey ? answers.profile?.[profileKey] : history_ ? history[Number(history_[1])]?.[history_[2] as keyof StoredJobHistory] : undefined;
+    if (typeof value === 'string' || typeof value === 'number') {
+      texts.push(datePartForQuestion(dateKeyForCandidate(match.bestKey), String(value), question));
+      if (profileKey) texts.push(...(answers.profileAlternates?.[profileKey] ?? []));
+    }
+  }
+  return [...new Set(texts.map((text) => String(text).trim()).filter(Boolean))];
+}
+
+/**
+ * Fill a closed custom dropdown: open it, pick a High-confidence option (typing to
+ * filter searchable ones if needed), and confirm the widget now shows the choice.
+ * Anything uncertain is left blank and the menu is closed again.
+ */
+async function autofillClosedDropdown(target: HTMLElement, descriptor: DetectedField): Promise<boolean> {
+  if (dropdownHasValue(target)) return false;
+  const browserApi = (globalThis as typeof globalThis & { browser: StorageBrowser }).browser;
+  const stored = await browserApi.storage.local.get(['answers', 'workHistory', 'jobContextOverrides', 'detectedPageContexts', 'matchingThresholds']);
+  const answers = withDerivedProfile(stored.answers as StoredAnswers | undefined) ?? {};
+  const history = savedWorkHistory(stored);
+  if (!stored.answers && history.length === 0) return false;
+  const thresholds = validThresholds(stored.matchingThresholds);
+  const context = await previewContext(stored);
+  const question = questionForMatching(descriptor);
+  const hint = profileKeyHint(descriptor);
+  // Only open menus we expect to answer, so unrelated required fields aren't touched.
+  const searchTexts = desiredChoiceTexts(question, answers, thresholds, context, history, hint);
+  if (searchTexts.length === 0 || !target.isConnected) return false;
+
+  return whileDriving(async () => {
+    let pressed: string | undefined;
+    let typed = false;
+    const pickFromOpenMenu = async (): Promise<boolean> => {
+      const choice = getStoredChoice(question, focusedChoices(target), answers, thresholds, context, history, hint);
+      if (!choice || choice.confidence !== 'high') return false;
+      pressElement(choice.option.element);
+      pressed = choice.option.label;
+      await settle();
+      return true;
+    };
+    try {
+      const opened = await openDropdown(target);
+      if (!(opened.length > 0 && await pickFromOpenMenu())) {
+        for (const text of searchTexts) {
+          const filtered = await filterDropdown(target, text);
+          typed = true;
+          if (filtered.length > 0 && await pickFromOpenMenu()) break;
+        }
+      }
+    } finally {
+      if (!pressed && typed) clearTypedFilter(target);
+      await closeDropdown(target);
+    }
+    if (!pressed) return false;
+    const shown = dropdownDisplayText(target).toLocaleLowerCase();
+    const applied = shown.includes(pressed.toLocaleLowerCase()) || hasRealChoice(target);
+    if (applied) reportMatchedField(target);
+    return applied;
+  });
 }
 
 function agreementPromptText(target: HTMLElement, descriptor: DetectedField): string {
@@ -719,6 +828,14 @@ export function chooseSavedAnswerOption<T extends ChoiceOption>(
   const uniqueDirectOptions = [...new Map(directOptions.map((option) => [option.value ?? option.label, option])).values()];
   if (uniqueDirectOptions.length === 1) return uniqueDirectOptions[0];
   if (uniqueDirectOptions.length > 1) return undefined;
+  // Same meaning, different form: state codes, country names, degree levels, numeric ranges.
+  const conceptOption = chooseConceptOption(values, options);
+  if (conceptOption) return conceptOption;
+  const rangeOptions = [...new Set(values.flatMap((value) => {
+    const option = chooseRangeOption(value, options);
+    return option ? [option] : [];
+  }))];
+  if (rangeOptions.length === 1) return rangeOptions[0];
   const veryHighQuestionConfidence = questionScore >= 0.85 && questionScore - runnerUpScore >= 0.08;
   if (!veryHighQuestionConfidence) return undefined;
   const generalizedOptions = values.flatMap((value) => {
@@ -960,14 +1077,14 @@ function installChoicePreview(
     restore();
     activePreview = undefined;
     if (isChoiceWidget(target)) {
-      option.element.click();
+      pressElement(option.element);
       dispatchNativeChoiceChange(target);
     } else if (target instanceof HTMLSelectElement) {
       const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
       setter?.call(target, option.value ?? (option.element instanceof HTMLOptionElement ? option.element.value : ''));
       dispatchNativeChoiceChange(target);
     } else if (target.getAttribute('role') === 'radio' || target.getAttribute('role') === 'checkbox') {
-      option.element.click();
+      pressElement(option.element);
       dispatchNativeChoiceChange(option.element);
     } else {
       const chosen = option.element as unknown as HTMLInputElement;
@@ -1023,6 +1140,7 @@ export async function showChoicePreview(
   const isChoiceWidgetTarget = isChoiceWidget(target);
   const isCustomChoice = target.getAttribute('role') === 'radio' || target.getAttribute('role') === 'checkbox';
   if (!isChoiceWidgetTarget && !isCustomChoice && !(target instanceof HTMLSelectElement) && !['radio', 'checkbox'].includes((target as HTMLInputElement).type)) return;
+  if (isDrivingDropdown()) return;
   if (isChoiceWidgetTarget && !choiceWidgetExpanded(target)) return;
   if (hasRealChoice(target)) return;
 
