@@ -4,6 +4,8 @@ import { chooseFactOption, type ChoiceOption } from '../matching/polarity';
 import { resolveTopicFact } from '../matching/topics';
 import { profileKeyHint } from '../matching/field-hints';
 import { chooseConceptOption, chooseRangeOption } from '../matching/option-variants';
+import { fitsDatePart, formatDatePart, keyAllowedInSection, parseDateValue, resolveStructuredField, type StructuredResult } from '../matching/structured-fields';
+import { recordFill } from './fill-tracker';
 import { clearTypedFilter, closeDropdown, filterDropdown, isDrivingDropdown, openDropdown, pressElement, settle, whileDriving } from './dropdown-driver';
 import { ariaComboboxOptions, choiceWidgetExpanded, isChoiceWidget, type DetectedField } from '../adapters/field';
 
@@ -35,6 +37,7 @@ type PreviewField = HTMLInputElement | HTMLTextAreaElement;
 type PreviewTarget = HTMLElement;
 type SelectChoice = ChoiceOption & { element: HTMLElement };
 type PageContext = { company?: string; role?: string };
+type StoredChoice = { option: SelectChoice; confidence: 'high' | 'medium'; sensitive: boolean; answerKey?: string; score?: number };
 
 function savedWorkHistory(stored: Record<string, unknown>): StoredJobHistory[] {
   const file = stored.workHistory as StoredWorkHistoryFile | undefined;
@@ -372,6 +375,94 @@ function matchTextField(descriptor: DetectedField, candidates: MatchCandidate[],
   return matchQuestion(questionForMatching(descriptor), candidates, thresholds);
 }
 
+/** Section- and date-aware resolution that runs before wording similarity. */
+function structuredFor(descriptor: DetectedField, isChoice: boolean, answers: StoredAnswers, history: StoredJobHistory[]): StructuredResult | undefined {
+  return resolveStructuredField({
+    question: descriptor.question,
+    questionParts: descriptor.questionParts,
+    attributeHints: descriptor.attributeHints,
+    section: descriptor.section,
+    datePart: descriptor.datePart,
+    dateBoundary: descriptor.dateBoundary,
+    placeholder: descriptor.placeholder,
+    inputType: descriptor.inputType,
+    isChoice,
+  }, answers.profile, history);
+}
+
+type TextResolution = { text: string; key: string; confidence: 'high' | 'medium'; sensitive: boolean; missingPlaceholder: boolean };
+
+/**
+ * The value a text box should get: from its section and date role first, then from
+ * wording similarity. A value that does not fit the box (a full date in a Year box,
+ * home city in a school's City box) is dropped instead of filled.
+ */
+function resolveTextValue(
+  descriptor: DetectedField,
+  answers: StoredAnswers,
+  history: StoredJobHistory[],
+  context: PageContext,
+  thresholds: Thresholds,
+): TextResolution | undefined {
+  const structured = structuredFor(descriptor, false, answers, history);
+  if (structured?.kind === 'abstain') return undefined;
+  let raw: string;
+  let key: string;
+  let confidence: 'high' | 'medium' = 'high';
+  let sensitive = false;
+  if (structured?.kind === 'fill') {
+    raw = structured.value;
+    key = structured.key;
+  } else {
+    const { candidates, answerByKey, sensitiveByKey } = makeCandidates(answers, context, history);
+    const match = matchTextField(descriptor, candidates, answerByKey, thresholds);
+    if (!match.bestKey || match.confidence === 'none') return undefined;
+    if (!keyAllowedInSection(match.bestKey, descriptor.section)) return undefined;
+    if (match.bestKey.startsWith('workHistory[') && match.secondKey?.startsWith('workHistory[')
+      && match.bestScore - match.secondScore < 0.08) return undefined;
+    const answer = answerByKey.get(match.bestKey);
+    if (answer === undefined || !answer.trim()) return undefined;
+    raw = datePartForQuestion(dateKeyForCandidate(match.bestKey), answer, questionForMatching(descriptor));
+    if (descriptor.datePart) {
+      const parsed = parseDateValue(answer);
+      const formatted = parsed && formatDatePart(parsed, descriptor.datePart, descriptor.placeholder, descriptor.inputType);
+      if (formatted) raw = formatted;
+    }
+    key = match.bestKey;
+    confidence = match.confidence;
+    sensitive = sensitiveByKey.has(match.bestKey);
+  }
+  const resolved = resolvePlaceholders(raw, context);
+  if (!resolved.text.trim() || !fitsDatePart(resolved.text, descriptor.datePart)) return undefined;
+  return { text: resolved.text, key, confidence, sensitive, missingPlaceholder: resolved.missing.length > 0 };
+}
+
+const dateProfileKeys = /(?:Date|DateYear|DateMonth|gradYear)$|^workHistory\[\d+\]\.(?:start|end)Date$/;
+
+/** Choose an option for a choice control, using section/date resolution before stored answers. */
+function chooseForControl(
+  descriptor: DetectedField,
+  options: SelectChoice[],
+  answers: StoredAnswers,
+  thresholds: Thresholds,
+  context: PageContext,
+  history: StoredJobHistory[],
+): StoredChoice | undefined {
+  const structured = structuredFor(descriptor, true, answers, history);
+  if (structured?.kind === 'abstain') return undefined;
+  if (structured?.kind === 'fill') {
+    const profileKey = structured.key.startsWith('profile.') ? structured.key.slice('profile.'.length) : undefined;
+    const partWord = descriptor.datePart === 'month' ? 'month' : descriptor.datePart === 'year' ? 'year' : questionForMatching(descriptor);
+    const option = dateProfileKeys.test(structured.key)
+      ? chooseDateDropdownOption(structured.value, options, partWord)
+      : chooseSavedAnswerOption(structured.value, options, 1, 0, profileKey ? answers.profileAlternates?.[profileKey] ?? [] : []);
+    return option ? { option, confidence: 'high', sensitive: false, answerKey: structured.key, score: 1 } : undefined;
+  }
+  const choice = getStoredChoice(questionForMatching(descriptor), options, answers, thresholds, context, history, profileKeyHint(descriptor));
+  if (choice?.answerKey && !keyAllowedInSection(choice.answerKey, descriptor.section)) return undefined;
+  return choice;
+}
+
 function questionForMatching(descriptor: DetectedField): string {
   const primary = descriptor.question.trim();
   // Some Workday subfields expose only "From", "To", "Month", or "Year" as
@@ -530,19 +621,13 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
       if (!answers && history.length === 0) return false;
       const thresholds = validThresholds(stored.matchingThresholds);
       const context = await previewContext(stored);
-      const { candidates, answerByKey } = makeCandidates(answers ?? {}, context, history);
-      const match = matchTextField(descriptor, candidates, answerByKey, thresholds);
+      const resolution = resolveTextValue(descriptor, answers ?? {}, history, context, thresholds);
       // Automatic filling has no review step before the value lands, so it only
       // uses High-confidence matches. Medium matches stay available as previews.
-      if (!match.bestKey || match.confidence !== 'high') return false;
-      if (match.bestKey.startsWith('workHistory[') && match.secondKey?.startsWith('workHistory[')
-        && match.bestScore - match.secondScore < 0.08) return false;
-      const answer = answerByKey.get(match.bestKey);
-      if (answer === undefined) return false;
-      const dateValue = datePartForQuestion(dateKeyForCandidate(match.bestKey), answer, questionForMatching(descriptor));
-      const resolved = resolvePlaceholders(dateValue, context);
-      if (resolved.missing.length > 0 || !resolved.text.trim() || !target.isConnected || target.value.length > 0) return false;
-      nativeSetValue(target, resolved.text);
+      if (!resolution || resolution.confidence !== 'high' || resolution.missingPlaceholder) return false;
+      if (!target.isConnected || target.value.length > 0) return false;
+      nativeSetValue(target, resolution.text);
+      recordFill(target, { kind: 'text', value: resolution.text });
       reportMatchedField(target);
       return true;
     }
@@ -554,14 +639,40 @@ export async function autofillControl(target: HTMLElement, descriptor: DetectedF
     const history = savedWorkHistory(stored);
     if (!answers && history.length === 0) return false;
     const context = await previewContext(stored);
-    const choice = getStoredChoice(questionForMatching(descriptor), focusedChoices(target), answers ?? {}, validThresholds(stored.matchingThresholds), context, history, profileKeyHint(descriptor));
+    const previousSelectValue = target instanceof HTMLSelectElement ? target.value : undefined;
+    const choice = chooseForControl(descriptor, focusedChoices(target), answers ?? {}, validThresholds(stored.matchingThresholds), context, history);
     if (!choice || choice.confidence !== 'high' || !setChoiceValue(target, choice.option)) return false;
+    recordChoiceFill(target, choice.option, previousSelectValue);
     reportMatchedField(target);
     return true;
   } catch {
     // A storage or page-control failure must not stop the rest of the one-time sweep.
     return false;
   }
+}
+
+/** Register a choice the extension made so it is highlighted and can be undone where possible. */
+function recordChoiceFill(target: HTMLElement, option: SelectChoice, previousSelectValue?: string): void {
+  if (target instanceof HTMLSelectElement) {
+    recordFill(target, { kind: 'select', value: target.value, previous: previousSelectValue ?? '' });
+  } else if (option.element instanceof HTMLInputElement && ['radio', 'checkbox'].includes(option.element.type)) {
+    recordFill(option.element, { kind: 'check' }, option.element.labels?.[0] ?? option.element);
+  } else if (target.getAttribute('role') === 'radio' || target.getAttribute('role') === 'checkbox') {
+    recordFill(option.element, { kind: 'custom' });
+  } else {
+    recordFill(target, { kind: 'custom' }, dropdownHighlightTarget(target));
+  }
+}
+
+/** The visible box of a custom dropdown: React-style inputs are tiny, so outline their control. */
+function dropdownHighlightTarget(target: HTMLElement): HTMLElement {
+  if (!(target instanceof HTMLInputElement)) return target;
+  let element: HTMLElement | null = target.parentElement;
+  for (let depth = 0; element && depth < 3; depth += 1, element = element.parentElement) {
+    if (element.querySelector('label, legend, [role="listbox"]')) break;
+    if (element.getClientRects().length > 0 && element.offsetWidth > target.offsetWidth + 20) return element;
+  }
+  return target.parentElement ?? target;
 }
 
 /**
@@ -637,14 +748,18 @@ async function autofillClosedDropdown(target: HTMLElement, descriptor: DetectedF
   const question = questionForMatching(descriptor);
   const hint = profileKeyHint(descriptor);
   // Only open menus we expect to answer, so unrelated required fields aren't touched.
-  const searchTexts = desiredChoiceTexts(question, answers, thresholds, context, history, hint);
+  const structured = structuredFor(descriptor, true, answers, history);
+  if (structured?.kind === 'abstain') return false;
+  const searchTexts = structured?.kind === 'fill'
+    ? [structured.value]
+    : desiredChoiceTexts(question, answers, thresholds, context, history, hint);
   if (searchTexts.length === 0 || !target.isConnected) return false;
 
   return whileDriving(async () => {
     let pressed: string | undefined;
     let typed = false;
     const pickFromOpenMenu = async (): Promise<boolean> => {
-      const choice = getStoredChoice(question, focusedChoices(target), answers, thresholds, context, history, hint);
+      const choice = chooseForControl(descriptor, focusedChoices(target), answers, thresholds, context, history);
       if (!choice || choice.confidence !== 'high') return false;
       pressElement(choice.option.element);
       pressed = choice.option.label;
@@ -667,7 +782,10 @@ async function autofillClosedDropdown(target: HTMLElement, descriptor: DetectedF
     if (!pressed) return false;
     const shown = dropdownDisplayText(target).toLocaleLowerCase();
     const applied = shown.includes(pressed.toLocaleLowerCase()) || hasRealChoice(target);
-    if (applied) reportMatchedField(target);
+    if (applied) {
+      recordFill(target, { kind: 'custom' }, dropdownHighlightTarget(target));
+      reportMatchedField(target);
+    }
     return applied;
   });
 }
@@ -945,7 +1063,7 @@ function getStoredChoice(
   context: PageContext = {},
   history: StoredJobHistory[] = [],
   hintedProfileKey?: string,
-): { option: SelectChoice; confidence: 'high' | 'medium'; sensitive: boolean; answerKey?: string; score?: number } | undefined {
+): StoredChoice | undefined {
   if (options.length === 0) return undefined;
   const storedMatch = matchStoredEntry(question, answers, ['choice', 'yesno'], thresholds, context);
   // Known yes/no topics (sponsorship, work authorization, relocation, age, conflicts)
@@ -1154,7 +1272,7 @@ export async function showChoicePreview(
     const thresholds = validThresholds(stored.matchingThresholds);
     const options = focusedChoices(target);
     const context = await previewContext(stored);
-    const choice = getStoredChoice(questionForMatching(descriptor), options, answers ?? {}, thresholds, context, history, profileKeyHint(descriptor));
+    const choice = chooseForControl(descriptor, options, answers ?? {}, thresholds, context, history);
     if (!choice) return;
     const highlighted = choice.confidence === 'medium' || choice.sensitive;
     installChoicePreview(target, choice.option, options, highlighted);
@@ -1263,18 +1381,10 @@ export async function showTextPreview(
     const thresholds = validThresholds(stored.matchingThresholds);
 
     const context = await previewContext(stored);
-    const { candidates, answerByKey, sensitiveByKey } = makeCandidates(answers ?? {}, context, history);
-    const match = matchTextField(descriptor, candidates, answerByKey, thresholds);
-    if (!match.bestKey || match.confidence === 'none') return;
-    if (match.bestKey.startsWith('workHistory[') && match.secondKey?.startsWith('workHistory[')
-      && match.bestScore - match.secondScore < 0.08) return;
-    const answer = answerByKey.get(match.bestKey);
-    if (answer === undefined || !answer.trim()) return;
-
-    const dateValue = datePartForQuestion(dateKeyForCandidate(match.bestKey), answer, questionForMatching(descriptor));
-    const resolved = resolvePlaceholders(dateValue, context);
-    const highlighted = match.confidence === 'medium' || sensitiveByKey.has(match.bestKey) || resolved.missing.length > 0;
-    installPreview(target, resolved.text, highlighted, resolved.missing.length > 0);
+    const resolution = resolveTextValue(descriptor, answers ?? {}, history, context, thresholds);
+    if (!resolution) return;
+    const highlighted = resolution.confidence === 'medium' || resolution.sensitive || resolution.missingPlaceholder;
+    installPreview(target, resolution.text, highlighted, resolution.missingPlaceholder);
   } catch {
     // A storage failure must never change the field or interrupt normal form entry.
   }

@@ -23,3 +23,10 @@ textarea[data-job-autofill-preview="highlighted"]::placeholder {
   text-decoration: underline dotted;
   text-underline-offset: 0.15em;
 }
+
+/* Fields the extension filled automatically; removed once the person edits them. */
+.job-autofill-filled {
+  outline: 2px solid rgba(31, 122, 77, 0.55) !important;
+  outline-offset: 1px;
+  background-color: rgba(31, 122, 77, 0.07) !important;
+}

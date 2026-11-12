@@ -49,6 +49,34 @@
           <label data-automation-id="formField-label" for="workday-motivation">Why are you interested in this role?</label>
           <textarea id="workday-motivation" name="motivation"></textarea>
         </div>
+        <!-- Workday "My Experience": each repeated entry is a labelled group; date boxes are labelled only Month/Year. -->
+        <div role="group" aria-labelledby="workday-work-2">
+          <h4 id="workday-work-2">Work Experience 2</h4>
+          <div data-automation-id="formField-jobTitle"><label data-automation-id="formField-label">Job Title</label><input type="text"></div>
+          <div data-automation-id="formField-companyName"><label data-automation-id="formField-label">Company</label><input type="text"></div>
+          <div data-automation-id="formField-location"><label data-automation-id="formField-label">Location</label><input type="text"></div>
+          <div data-automation-id="formField-startDate">
+            <label data-automation-id="formField-label">From</label>
+            <div data-automation-id="dateInputWrapper"><input type="text" role="spinbutton" aria-label="Month" data-automation-id="dateSectionMonth-input" placeholder="MM"><input type="text" role="spinbutton" aria-label="Year" data-automation-id="dateSectionYear-input" placeholder="YYYY"></div>
+          </div>
+          <div data-automation-id="formField-endDate">
+            <label data-automation-id="formField-label">To</label>
+            <div data-automation-id="dateInputWrapper"><input type="text" role="spinbutton" aria-label="Month" data-automation-id="dateSectionMonth-input" placeholder="MM"><input type="text" role="spinbutton" aria-label="Year" data-automation-id="dateSectionYear-input" placeholder="YYYY"></div>
+          </div>
+        </div>
+        <div role="group" aria-labelledby="workday-edu-1">
+          <h4 id="workday-edu-1">Education 1</h4>
+          <div data-automation-id="formField-schoolName"><label data-automation-id="formField-label">School or University</label><input type="text"></div>
+          <div data-automation-id="formField-fieldOfStudy"><label data-automation-id="formField-label">Field of Study</label><input type="text"></div>
+          <div data-automation-id="formField-firstYearAttended">
+            <label data-automation-id="formField-label">From</label>
+            <div data-automation-id="dateInputWrapper"><input type="text" role="spinbutton" aria-label="Year" data-automation-id="dateSectionYear-input" placeholder="YYYY"></div>
+          </div>
+          <div data-automation-id="formField-lastYearAttended">
+            <label data-automation-id="formField-label">To (Actual or Expected)</label>
+            <div data-automation-id="dateInputWrapper"><input type="text" role="spinbutton" aria-label="Year" data-automation-id="dateSectionYear-input" placeholder="YYYY"></div>
+          </div>
+        </div>
       </section>
     </form>
   </main>

@@ -1,6 +1,17 @@
 import type { FormAdapter } from './generic';
+import {
+  classifySectionText, detectDateBoundary, detectDatePart,
+  type DateBoundary, type DatePart, type FieldSection,
+} from '../matching/structured-fields';
 
 export type DetectedField = {
+  /** Repeated form section the field sits in, such as Education 1 or Work Experience 2. */
+  section?: FieldSection;
+  /** The part of a date this box holds, when it is a date box. */
+  datePart?: DatePart;
+  /** Whether a date box is the start or end of a period. */
+  dateBoundary?: DateBoundary;
+  placeholder?: string;
   adapter: string;
   question: string;
   questionParts: string[];
@@ -141,19 +152,120 @@ export function describeFocusedField(
     optionLabels = labels.filter(Boolean);
   }
 
+  const attributeHints = fieldAttributeHints(field);
+  const placeholder = field.getAttribute('placeholder')?.trim() || undefined;
+  const inputType = field instanceof HTMLInputElement ? field.type : undefined;
+  const datePart = fieldType === 'yesno' ? undefined : detectDatePart({ inputType, placeholder, attributeHints, questionParts });
+  const section = sectionOf(field, attributeHints);
+  // Boundary words come from the box's own labels and the wrapper label ("From", "To (Actual or Expected)").
+  let dateBoundary = detectDateBoundary([...questionParts.slice(0, 3), ...attributeHints]);
+  if (!dateBoundary && datePart && section?.kind === 'education' && onlyDateBoxInSection(field, datePart)) {
+    // A lone "Year" box under Education is the graduation year.
+    dateBoundary = 'end';
+  }
+
   return {
+    section,
+    datePart,
+    dateBoundary,
+    placeholder,
     adapter: adapter.name,
     // The first part is the accessible, user-facing label. Keep noisy nearby
     // text, IDs, and placeholders as fallbacks instead of diluting that label.
     question: questionParts[0] ?? questionParts.join(' '),
     questionParts,
     fieldType,
-    inputType: field instanceof HTMLInputElement ? field.type : undefined,
+    inputType,
     autocomplete: field.getAttribute('autocomplete') ?? undefined,
-    attributeHints: ['name', 'id', 'data-automation-id', 'data-qa', 'data-testid']
-      .map((attribute) => field.getAttribute(attribute)?.trim() ?? '')
-      .filter(Boolean),
+    attributeHints,
     groupSize: members.length,
     optionLabels,
   };
+}
+
+const hintAttributes = ['name', 'id', 'data-automation-id', 'data-qa', 'data-testid'];
+
+/**
+ * Machine names for the field, plus its Workday wrapper's (`formField-lastYearAttended`),
+ * which names the question when the box itself is only `dateSectionYear-input`.
+ */
+function fieldAttributeHints(field: HTMLElement): string[] {
+  const hints = hintAttributes.map((attribute) => field.getAttribute(attribute)?.trim() ?? '').filter(Boolean);
+  const wrapper = typeof field.closest === 'function' ? field.closest('[data-automation-id^="formField-"]') : null;
+  const wrapperId = wrapper?.getAttribute('data-automation-id');
+  if (wrapperId && !hints.includes(wrapperId)) hints.push(wrapperId);
+  return hints;
+}
+
+const headingSelector = 'h1, h2, h3, h4, h5, h6, [role="heading"]';
+
+function shortText(element: Element | null | undefined): string | undefined {
+  const text = element?.textContent?.replace(/\s+/g, ' ').trim();
+  return text && text.length <= 60 ? text : undefined;
+}
+
+/** Labels a container gives itself: aria-label, aria-labelledby, a fieldset legend, or machine names. */
+function containerSection(element: HTMLElement): FieldSection | undefined {
+  const doc = element.ownerDocument;
+  const labelledBy = element.getAttribute('aria-labelledby')?.trim().split(/\s+/)
+    .map((id) => shortText(doc.getElementById(id))).filter(Boolean).join(' ');
+  const legend = element.tagName === 'FIELDSET'
+    ? shortText(Array.from(element.children).find((child) => child.tagName === 'LEGEND'))
+    : undefined;
+  for (const text of [element.getAttribute('aria-label'), labelledBy, legend]) {
+    const section = text ? classifySectionText(text, 'heading') : undefined;
+    if (section) return section;
+  }
+  for (const text of [element.getAttribute('data-automation-id'), element.id]) {
+    const section = text ? classifySectionText(text, 'name') : undefined;
+    if (section) return section;
+  }
+  return undefined;
+}
+
+/**
+ * The nearest repeated section around a field. Container labels win first; otherwise
+ * the closest heading before the field decides, so a later "Education" heading never
+ * reaches back over a "Contact information" heading.
+ */
+export function sectionOf(field: HTMLElement, attributeHints: string[] = []): FieldSection | undefined {
+  for (const hint of attributeHints) {
+    const section = classifySectionText(hint, 'name');
+    if (section) return section;
+  }
+  let ancestor = field.parentElement;
+  for (let depth = 0; ancestor && depth < 20 && ancestor !== field.ownerDocument.body; depth += 1, ancestor = ancestor.parentElement) {
+    const labelled = containerSection(ancestor);
+    if (labelled) return labelled;
+    const headings = Array.from(ancestor.querySelectorAll<HTMLElement>(headingSelector))
+      .filter((heading) => heading.tagName !== 'H1' && !heading.contains(field)
+        && Boolean(heading.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING));
+    const nearest = headings.at(-1);
+    if (nearest) {
+      const text = shortText(nearest);
+      return text ? classifySectionText(text, 'heading') : undefined;
+    }
+  }
+  return undefined;
+}
+
+/** True when the field is the only box of its date part inside its section's container. */
+function onlyDateBoxInSection(field: HTMLElement, part: DatePart): boolean {
+  let ancestor = field.parentElement;
+  for (let depth = 0; ancestor && depth < 20 && ancestor !== field.ownerDocument.body; depth += 1, ancestor = ancestor.parentElement) {
+    const isSection = Boolean(containerSection(ancestor))
+      || Array.from(ancestor.querySelectorAll(headingSelector)).some((heading) => !heading.contains(field)
+        && Boolean(heading.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING));
+    if (!isSection) continue;
+    const boxes = Array.from(ancestor.querySelectorAll<HTMLElement>('input, select, [role="combobox"], [aria-haspopup="listbox"], [role="spinbutton"]'))
+      .filter((box) => detectDatePart({
+        inputType: box instanceof HTMLInputElement ? box.type : undefined,
+        placeholder: box.getAttribute('placeholder') ?? undefined,
+        attributeHints: hintAttributes.map((attribute) => box.getAttribute(attribute) ?? '').filter(Boolean),
+        questionParts: [box.getAttribute('aria-label') ?? '', ...(box instanceof HTMLInputElement || box instanceof HTMLSelectElement
+          ? Array.from(box.labels ?? []).map((label) => label.textContent ?? '') : [])],
+      }) === part);
+    return boxes.length === 1;
+  }
+  return false;
 }

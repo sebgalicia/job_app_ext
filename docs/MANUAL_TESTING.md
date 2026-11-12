@@ -17,7 +17,7 @@ Start the local fixture server with `npm run serve:fixtures`, open a fixture pag
 ## One-pass automatic filling
 
 - [ ] The setting is on by default (no saved preference), and stays off after you turn it off.
-- [ ] When enabled, opening a supported application page fills visible, empty fields with Medium or High confidence matches; focus previews do not appear in this mode.
+- [ ] When enabled, opening a supported application page fills visible, empty fields with High confidence matches only; focusing a skipped field still shows a suggestion.
 - [ ] Existing text and selected choices are never overwritten; low-confidence or missing-context answers stay empty.
 - [ ] The pass does not submit the form or react to focus events; after pressing Next/Continue, it fills visible, empty fields in the newly revealed step.
 - [ ] With automatic filling on, the Workday fixture's first step fills on load and its second step fills after pressing **Next step**.
@@ -25,6 +25,15 @@ Start the local fixture server with `npm run serve:fixtures`, open a fixture pag
 - [ ] On a real application with custom dropdowns (Workday, or Greenhouse/Ashby "Select..." menus), dropdowns you have answers for fill on load; no menu is left open, and dropdowns without an answer are never opened.
 - [ ] Clear a filled dropdown or text field by hand: the extension does not fill it again on that page.
 - [ ] Disabling the setting prevents automatic filling on subsequently opened pages.
+- [ ] Filled fields get a green outline and a panel in the bottom-right says how many were filled. Editing a field removes its outline. **Undo all** empties filled text boxes and native selects/radios, and says how many custom dropdowns need changing by hand; **Done reviewing** removes the outlines and keeps the values.
+
+## Sections and date boxes
+
+- [ ] Workday fixture step two: **Work Experience 2** fills from your *second* saved job (title, company, From/To month as `MM` and year as `YYYY`); **Location** stays empty.
+- [ ] Workday fixture step two: **Education 1** From/To boxes get only the year (e.g. `2020` / `2024`), never a full date; School and Field of Study fill from your profile.
+- [ ] A current job (`"current": true`) leaves its **To** date empty.
+- [ ] On a real application, a **References** or **Emergency contact** section is never filled with your own name, email, or phone.
+- [ ] A **City** box under Education gets `schoolCity` (or stays empty), not your home city.
 
 ## Choices and sensitive answers
 
