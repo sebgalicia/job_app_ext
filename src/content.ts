@@ -1,5 +1,6 @@
 import { chooseAdapter } from './adapters';
 import { choiceWidgetExpanded, describeFocusedField, isChoiceWidget } from './adapters/field';
+import { isDrivingDropdown } from './preview/dropdown-driver';
 import { autoAgreeTermsControl, autofillControl, detectPageContext, dismissActivePreview, saveDetectedPageContext, showChoicePreview, showTextPreview } from './preview/text-preview';
 
 const supportedControls = 'input, textarea, select, [role="radio"], [role="checkbox"]';
@@ -26,6 +27,11 @@ const previewBrowser = (globalThis as typeof globalThis & { browser: {
 let pageAutomationStopped = false;
 let siteAllowsAutofill = false;
 let nextStepScanTimer: number | undefined;
+// Each control is tried once per page, so rescans never refill a field the user cleared.
+const attemptedControls = new WeakSet<HTMLElement>();
+let scanInProgress: Promise<void> | undefined;
+let scanQueued = false;
+const scannableControls = 'input, textarea, select, [role="radio"], [role="checkbox"], [role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="true"], [data-automation-id="selectWidget"]';
 // Filling as each step opens is the default; only an explicit "off" in Settings disables it.
 const onePassAutofillEnabled = previewBrowser.storage.local.get('autofillOnOpen')
   .then((stored) => stored.autofillOnOpen !== false)
@@ -107,9 +113,7 @@ async function scanVisibleFieldsOnce(includeRegularAutofill: boolean): Promise<v
   if (siteEnabled?.[location.hostname] === false) return;
   if (!includeRegularAutofill && settings.autoAgreeTerms !== true) return;
   const adapter = chooseAdapter(document);
-  const controls = Array.from(document.querySelectorAll<HTMLElement>(
-    `${supportedControls}, [role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="true"], [data-automation-id="selectWidget"]`,
-  ));
+  const controls = Array.from(document.querySelectorAll<HTMLElement>(scannableControls));
   const seenGroups = new Set<string>();
   const seenCustomGroups = new Set<HTMLElement>();
   for (const control of controls) {
@@ -127,11 +131,59 @@ async function scanVisibleFieldsOnce(includeRegularAutofill: boolean): Promise<v
         seenCustomGroups.add(group);
       }
     }
+    if (attemptedControls.has(control)) continue;
     const descriptor = describeFocusedField(control, adapter);
     if (!descriptor.question) continue;
+    attemptedControls.add(control);
     if (settings.autoAgreeTerms === true) await autoAgreeTermsControl(control, descriptor);
     if (includeRegularAutofill) await autofillControl(control, descriptor);
   }
+}
+
+/** Run one scan at a time; a request during a scan runs once more afterwards. */
+function requestScan(): void {
+  if (scanInProgress) {
+    scanQueued = true;
+    return;
+  }
+  scanInProgress = scanVisibleFieldsOnce(pageAutomationStopped && siteAllowsAutofill)
+    .catch(() => undefined)
+    .finally(() => {
+      scanInProgress = undefined;
+      if (scanQueued) {
+        scanQueued = false;
+        requestScan();
+      }
+    });
+}
+
+function addsFormControls(mutation: MutationRecord): boolean {
+  if (mutation.type === 'attributes') {
+    return mutation.target instanceof Element
+      && (mutation.target.matches(scannableControls) || mutation.target.querySelector(scannableControls) !== null);
+  }
+  return Array.from(mutation.addedNodes).some((node) => node instanceof Element
+    && (node.matches(scannableControls) || node.querySelector(scannableControls) !== null));
+}
+
+/**
+ * Application sites render fields late and swap steps without reloading, so watch for
+ * new or newly shown form controls instead of relying on a single timed pass.
+ */
+function watchForNewFields(): void {
+  let timer: number | undefined;
+  const observer = new MutationObserver((mutations) => {
+    // Menus the extension opens itself add options, not new questions.
+    if (isDrivingDropdown() || !mutations.some(addsFormControls)) return;
+    if (timer !== undefined) window.clearTimeout(timer);
+    timer = window.setTimeout(() => {
+      timer = undefined;
+      requestScan();
+    }, 400);
+  });
+  observer.observe(document.documentElement, {
+    childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'aria-hidden'],
+  });
 }
 
 function handleStepAdvance(event: MouseEvent): void {
@@ -144,13 +196,14 @@ function handleStepAdvance(event: MouseEvent): void {
   if (nextStepScanTimer !== undefined) window.clearTimeout(nextStepScanTimer);
   nextStepScanTimer = window.setTimeout(() => {
     nextStepScanTimer = undefined;
-    void scanVisibleFieldsOnce(pageAutomationStopped && siteAllowsAutofill).catch(() => undefined);
+    requestScan();
   }, 500);
 }
 
 async function initialPagePass(): Promise<void> {
   if (await onePassAutofillEnabled) await autofillPageOnce();
   else await scanVisibleFieldsOnce(false);
+  watchForNewFields();
 }
 
 const installationFlag = '__jobAutofillContentInstalled';

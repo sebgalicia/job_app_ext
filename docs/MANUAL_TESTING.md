@@ -21,6 +21,9 @@ Start the local fixture server with `npm run serve:fixtures`, open a fixture pag
 - [ ] Existing text and selected choices are never overwritten; low-confidence or missing-context answers stay empty.
 - [ ] The pass does not submit the form or react to focus events; after pressing Next/Continue, it fills visible, empty fields in the newly revealed step.
 - [ ] With automatic filling on, the Workday fixture's first step fills on load and its second step fills after pressing **Next step**.
+- [ ] In the Workday fixture, the closed **Country** dropdown opens by itself, selects "United States of America" (with `profile.country` set to "United States"), and closes. **Preferred schedule** stays "Select One" unless you saved an answer for it.
+- [ ] On a real application with custom dropdowns (Workday, or Greenhouse/Ashby "Select..." menus), dropdowns you have answers for fill on load; no menu is left open, and dropdowns without an answer are never opened.
+- [ ] Clear a filled dropdown or text field by hand: the extension does not fill it again on that page.
 - [ ] Disabling the setting prevents automatic filling on subsequently opened pages.
 
 ## Choices and sensitive answers
